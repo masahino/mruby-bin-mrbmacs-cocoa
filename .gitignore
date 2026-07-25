@@ -1,0 +1,5 @@
+/mruby/
+/build/
+*.log
+.DS_Store
+
