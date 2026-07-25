@@ -7,6 +7,7 @@
 
 static mrb_state *mrbmacs_mrb;
 static mrb_value mrbmacs_frame;
+static mrb_value mrbmacs_app;
 
 static void
 print_mruby_error(mrb_state *mrb)
@@ -98,6 +99,7 @@ main(int argc, char **argv)
     struct RClass *pane_class;
     struct RClass *tab_class;
     struct RClass *frame_class;
+    struct RClass *application_class;
     mrb_value mrbmacs_view;
     mrb_value buffer;
     mrb_value pane;
@@ -142,6 +144,9 @@ main(int argc, char **argv)
     frame_class = mrb_class_get_under(
       mrbmacs_mrb, mrbmacs, "FrameCocoa"
     );
+    application_class = mrb_class_get_under(
+      mrbmacs_mrb, mrbmacs, "ApplicationCocoa"
+    );
 
     buffer = mrb_funcall(
       mrbmacs_mrb, mrb_obj_value(buffer_class), "new", 1,
@@ -180,6 +185,20 @@ main(int argc, char **argv)
     }
     mrb_gc_register(mrbmacs_mrb, mrbmacs_frame);
 
+    mrbmacs_app = mrb_funcall(
+      mrbmacs_mrb, mrb_obj_value(application_class), "new", 2,
+      mrbmacs_frame, buffer
+    );
+    if (mrbmacs_mrb->exc != NULL) {
+      print_mruby_error(mrbmacs_mrb);
+      mrb_close(mrbmacs_mrb);
+      return EXIT_FAILURE;
+    }
+    mrb_gc_register(mrbmacs_mrb, mrbmacs_app);
+    mrb_gv_set(
+      mrbmacs_mrb, mrb_intern_lit(mrbmacs_mrb, "$app"), mrbmacs_app
+    );
+
     mrbmacs_view = mrb_funcall(
       mrbmacs_mrb, mrbmacs_frame, "view", 0
     );
@@ -213,6 +232,7 @@ main(int argc, char **argv)
     [application activateIgnoringOtherApps:YES];
     [application run];
 
+    mrb_gc_unregister(mrbmacs_mrb, mrbmacs_app);
     mrb_gc_unregister(mrbmacs_mrb, mrbmacs_frame);
     mrb_gc_unregister(mrbmacs_mrb, mrbmacs_view);
     mrb_close(mrbmacs_mrb);

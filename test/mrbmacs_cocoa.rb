@@ -81,6 +81,20 @@ assert('Mrbmacs::ApplicationCocoa dispatches Scintilla notifications') do
 end
 
 
+assert('Mrbmacs::ApplicationCocoa owns its Cocoa frame and initial buffer') do
+  buffer = Mrbmacs::Buffer.new('*scratch*')
+  pane = Mrbmacs::PaneCocoa.new(CocoaViewForLayoutTest.new, buffer)
+  frame = Mrbmacs::FrameCocoa.new(Mrbmacs::TabCocoa.new(pane))
+  app = Mrbmacs::ApplicationCocoa.new(frame, buffer)
+
+  assert_same frame, app.frame
+  assert_same buffer, app.current_buffer
+  assert_equal [buffer], app.buffer_list
+  assert_equal({}, app.sci_handler)
+  assert_kind_of Mrbmacs::Config, app.config
+end
+
+
 assert('Cocoa layout starts with one frame, one tab, and one pane') do
   view = CocoaViewForLayoutTest.new
   pane = Mrbmacs::PaneCocoa.new(view)

@@ -69,6 +69,13 @@ module Mrbmacs
 
   # Native macOS mrbmacs application.
   class ApplicationCocoa < Application
+    def initialize(frame, buffer)
+      init_instance_variables
+      @frame = frame
+      @current_buffer = buffer
+      @buffer_list = [buffer]
+    end
+
     def sci_notify(notification)
       $stderr.puts notification['code'] if $DEBUG
       call_sci_event(notification)
