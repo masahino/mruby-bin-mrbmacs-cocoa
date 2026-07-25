@@ -9,7 +9,9 @@ MRuby::Build.new do |conf|
     gem.skip_test = true
   end
 
-  conf.gem File.expand_path('../mruby-scintilla-cocoa', __dir__)
+  local_scintilla_cocoa =
+    File.expand_path('../mruby-scintilla-cocoa', __dir__)
+  conf.gem local_scintilla_cocoa if File.directory?(local_scintilla_cocoa)
   conf.gem File.expand_path(__dir__)
 
   conf.linker.libraries << 'c++'
