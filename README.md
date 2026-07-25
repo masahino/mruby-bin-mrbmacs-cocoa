@@ -10,11 +10,16 @@ The initial implementation:
 - creates a native AppKit application and window;
 - embeds `Scintilla::ScintillaCocoa`;
 - forwards Scintilla notifications to the active mrbmacs application;
+- represents the initial editor as one frame, one layout tab, and one pane;
 - opens a file passed on the command line;
 - provides a standard application menu and Quit command.
 
 Editor commands, modelines, multiple buffers, and the complete
 `mruby-mrbmacs-base` integration will be added incrementally.
+
+Tabs represent complete pane layouts rather than individual buffers. This
+keeps tabs compatible with Emacs-style window splitting and allows a buffer to
+be displayed in more than one pane or tab.
 
 ## Build
 
