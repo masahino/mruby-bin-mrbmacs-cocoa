@@ -13,6 +13,8 @@ The initial implementation:
 - represents the initial editor as one frame, one layout tab, and one pane;
 - connects the pane's Scintilla document to an `Mrbmacs::Buffer`;
 - creates an `ApplicationCocoa` that owns the initial frame and buffer;
+- routes handled Emacs-style keys to the mrbmacs keymap while leaving other
+  text input to Cocoa and its IME path;
 - opens a file passed on the command line;
 - provides a standard application menu and Quit command.
 

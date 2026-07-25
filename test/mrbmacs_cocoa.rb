@@ -19,12 +19,13 @@ end
 
 class CocoaViewForLayoutTest
   attr_accessor :notification_callback
-  attr_reader :added_documents, :set_documents
+  attr_reader :added_documents, :set_documents, :messages
 
   def initialize(docpointer = 100)
     @docpointer = docpointer
     @added_documents = []
     @set_documents = []
+    @messages = []
   end
 
   def sci_get_docpointer
@@ -38,6 +39,10 @@ class CocoaViewForLayoutTest
   def sci_set_docpointer(docpointer)
     @set_documents << docpointer
     @docpointer = docpointer
+  end
+
+  def send_message(message)
+    @messages << message
   end
 
   def native_handle
@@ -92,6 +97,46 @@ assert('Mrbmacs::ApplicationCocoa owns its Cocoa frame and initial buffer') do
   assert_equal [buffer], app.buffer_list
   assert_equal({}, app.sci_handler)
   assert_kind_of Mrbmacs::Config, app.config
+end
+
+
+assert('Mrbmacs::ApplicationCocoa handles a Scintilla key command') do
+  buffer = Mrbmacs::Buffer.new('*scratch*')
+  view = CocoaViewForLayoutTest.new
+  frame = Mrbmacs::FrameCocoa.new(
+    Mrbmacs::TabCocoa.new(Mrbmacs::PaneCocoa.new(view, buffer))
+  )
+  app = Mrbmacs::ApplicationCocoa.new(frame, buffer)
+
+  assert_true app.key_press('C-f')
+  assert_equal [Scintilla::SCI_CHARRIGHT], view.messages
+end
+
+
+assert('Mrbmacs::ApplicationCocoa handles a prefix Scintilla command') do
+  buffer = Mrbmacs::Buffer.new('*scratch*')
+  view = CocoaViewForLayoutTest.new
+  frame = Mrbmacs::FrameCocoa.new(
+    Mrbmacs::TabCocoa.new(Mrbmacs::PaneCocoa.new(view, buffer))
+  )
+  app = Mrbmacs::ApplicationCocoa.new(frame, buffer)
+
+  assert_true app.key_press('C-x')
+  assert_true app.key_press('u')
+  assert_equal [Scintilla::SCI_UNDO], view.messages
+end
+
+
+assert('Mrbmacs::ApplicationCocoa leaves text input to Cocoa') do
+  buffer = Mrbmacs::Buffer.new('*scratch*')
+  view = CocoaViewForLayoutTest.new
+  frame = Mrbmacs::FrameCocoa.new(
+    Mrbmacs::TabCocoa.new(Mrbmacs::PaneCocoa.new(view, buffer))
+  )
+  app = Mrbmacs::ApplicationCocoa.new(frame, buffer)
+
+  assert_false app.key_press('a')
+  assert_equal [], view.messages
 end
 
 

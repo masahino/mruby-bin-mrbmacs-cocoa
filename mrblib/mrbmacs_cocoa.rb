@@ -74,11 +74,35 @@ module Mrbmacs
       @frame = frame
       @current_buffer = buffer
       @buffer_list = [buffer]
+      @keymap = ViewKeyMap.new
+      @prefix_key = ''
     end
 
     def sci_notify(notification)
       $stderr.puts notification['code'] if $DEBUG
       call_sci_event(notification)
+    end
+
+    # Returns true only when mrbmacs consumed the key. Unhandled keys continue
+    # through Scintilla's Cocoa text input path, including IME composition.
+    def key_press(key)
+      key_sequence = "#{@prefix_key}#{key}"
+      command = key_scan(key_sequence)
+      return false if command.nil?
+
+      add_recent_key(key)
+      if command.is_a?(Integer)
+        @frame.view.send_message(command)
+        @prefix_key = ''
+      elsif command == 'prefix'
+        @prefix_key = "#{key_sequence} "
+      else
+        # Ruby editor commands need the echo/modeline frame adapter, which is
+        # intentionally introduced in the next integration step.
+        @prefix_key = ''
+        return false
+      end
+      true
     end
   end
 end
