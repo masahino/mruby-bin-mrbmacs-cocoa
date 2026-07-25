@@ -15,6 +15,7 @@ The initial implementation:
 - creates an `ApplicationCocoa` that owns the initial frame and buffer;
 - routes handled Emacs-style keys to the mrbmacs keymap while leaving other
   text input to Cocoa and its IME path;
+- exposes the active Cocoa pane through the shared Frame/EditWindow interface;
 - opens a file passed on the command line;
 - provides a standard application menu and Quit command.
 
