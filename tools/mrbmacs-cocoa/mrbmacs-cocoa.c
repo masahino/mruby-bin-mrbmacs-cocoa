@@ -6,7 +6,7 @@
 #include <mruby/variable.h>
 
 static mrb_state *mrbmacs_mrb;
-static mrb_value mrbmacs_view;
+static mrb_value mrbmacs_frame;
 
 static void
 print_mruby_error(mrb_state *mrb)
@@ -94,8 +94,14 @@ main(int argc, char **argv)
     struct RClass *scintilla;
     struct RClass *view_class;
     struct RClass *mrbmacs;
-    struct RClass *bridge_class;
-    mrb_value notification_bridge;
+    struct RClass *buffer_class;
+    struct RClass *pane_class;
+    struct RClass *tab_class;
+    struct RClass *frame_class;
+    mrb_value mrbmacs_view;
+    mrb_value buffer;
+    mrb_value pane;
+    mrb_value tab;
     mrb_value native_handle;
     NSView *view;
 
@@ -120,25 +126,63 @@ main(int argc, char **argv)
       mrb_close(mrbmacs_mrb);
       return EXIT_FAILURE;
     }
+    /* C retains and uses the native handle for the lifetime of the app, so
+       keep its mruby wrapper registered for the same lifetime. */
     mrb_gc_register(mrbmacs_mrb, mrbmacs_view);
-
     mrbmacs = mrb_module_get(mrbmacs_mrb, "Mrbmacs");
-    bridge_class = mrb_class_get_under(
-      mrbmacs_mrb, mrbmacs, "ScintillaNotificationBridge"
+    buffer_class = mrb_class_get_under(
+      mrbmacs_mrb, mrbmacs, "Buffer"
     );
-    notification_bridge = mrb_funcall(
-      mrbmacs_mrb, mrb_obj_value(bridge_class), "new", 0
+    pane_class = mrb_class_get_under(
+      mrbmacs_mrb, mrbmacs, "PaneCocoa"
     );
-    mrb_funcall(
-      mrbmacs_mrb, mrbmacs_view, "notification_callback=", 1,
-      notification_bridge
+    tab_class = mrb_class_get_under(
+      mrbmacs_mrb, mrbmacs, "TabCocoa"
+    );
+    frame_class = mrb_class_get_under(
+      mrbmacs_mrb, mrbmacs, "FrameCocoa"
+    );
+
+    buffer = mrb_funcall(
+      mrbmacs_mrb, mrb_obj_value(buffer_class), "new", 1,
+      argc > 1 ? mrb_str_new_cstr(mrbmacs_mrb, argv[1])
+               : mrb_str_new_lit(mrbmacs_mrb, "*scratch*")
     );
     if (mrbmacs_mrb->exc != NULL) {
       print_mruby_error(mrbmacs_mrb);
-      mrb_gc_unregister(mrbmacs_mrb, mrbmacs_view);
       mrb_close(mrbmacs_mrb);
       return EXIT_FAILURE;
     }
+    pane = mrb_funcall(
+      mrbmacs_mrb, mrb_obj_value(pane_class), "new", 2,
+      mrbmacs_view, buffer
+    );
+    if (mrbmacs_mrb->exc != NULL) {
+      print_mruby_error(mrbmacs_mrb);
+      mrb_close(mrbmacs_mrb);
+      return EXIT_FAILURE;
+    }
+    tab = mrb_funcall(
+      mrbmacs_mrb, mrb_obj_value(tab_class), "new", 1, pane
+    );
+    if (mrbmacs_mrb->exc != NULL) {
+      print_mruby_error(mrbmacs_mrb);
+      mrb_close(mrbmacs_mrb);
+      return EXIT_FAILURE;
+    }
+    mrbmacs_frame = mrb_funcall(
+      mrbmacs_mrb, mrb_obj_value(frame_class), "new", 1, tab
+    );
+    if (mrbmacs_mrb->exc != NULL) {
+      print_mruby_error(mrbmacs_mrb);
+      mrb_close(mrbmacs_mrb);
+      return EXIT_FAILURE;
+    }
+    mrb_gc_register(mrbmacs_mrb, mrbmacs_frame);
+
+    mrbmacs_view = mrb_funcall(
+      mrbmacs_mrb, mrbmacs_frame, "view", 0
+    );
 
     set_editor_text(mrbmacs_mrb, mrbmacs_view, initial_text(argc, argv));
     native_handle = mrb_funcall(
@@ -155,6 +199,10 @@ main(int argc, char **argv)
       autorelease
     ];
     [window setTitle:@"mrbmacs Cocoa"];
+    mrb_funcall(
+      mrbmacs_mrb, mrbmacs_frame, "native_handle=", 1,
+      mrb_int_value(mrbmacs_mrb, (mrb_int)(intptr_t)window)
+    );
     [view setFrame:window.contentView.bounds];
     [view setAutoresizingMask:NSViewWidthSizable | NSViewHeightSizable];
     [window.contentView addSubview:view];
@@ -165,6 +213,7 @@ main(int argc, char **argv)
     [application activateIgnoringOtherApps:YES];
     [application run];
 
+    mrb_gc_unregister(mrbmacs_mrb, mrbmacs_frame);
     mrb_gc_unregister(mrbmacs_mrb, mrbmacs_view);
     mrb_close(mrbmacs_mrb);
   }
