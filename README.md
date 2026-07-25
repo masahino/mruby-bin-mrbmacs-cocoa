@@ -18,12 +18,17 @@ Editor commands, modelines, multiple buffers, and the complete
 
 ## Build
 
-The sibling `mruby-scintilla-cocoa` repository must exist next to this
-repository.
+The build downloads mruby 4.0.0 and all required mrbgems, including
+`mruby-scintilla-cocoa`.
 
 ```sh
+git clone https://github.com/masahino/mruby-bin-mrbmacs-cocoa.git
+cd mruby-bin-mrbmacs-cocoa
 rake
 ```
+
+For development, a sibling `mruby-scintilla-cocoa` checkout is used
+automatically when present.
 
 Run the tests:
 
