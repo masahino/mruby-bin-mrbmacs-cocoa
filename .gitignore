@@ -1,5 +1,5 @@
 /mruby/
 /build/
+/build_config.rb.lock
 *.log
 .DS_Store
-

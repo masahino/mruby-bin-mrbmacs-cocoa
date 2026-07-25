@@ -5,8 +5,6 @@
 #include <mruby/string.h>
 #include <mruby/variable.h>
 
-#include "Scintilla.h"
-
 static mrb_state *mrbmacs_mrb;
 static mrb_value mrbmacs_view;
 
@@ -95,6 +93,9 @@ main(int argc, char **argv)
     NSWindow *window;
     struct RClass *scintilla;
     struct RClass *view_class;
+    struct RClass *mrbmacs;
+    struct RClass *bridge_class;
+    mrb_value notification_bridge;
     mrb_value native_handle;
     NSView *view;
 
@@ -120,6 +121,24 @@ main(int argc, char **argv)
       return EXIT_FAILURE;
     }
     mrb_gc_register(mrbmacs_mrb, mrbmacs_view);
+
+    mrbmacs = mrb_module_get(mrbmacs_mrb, "Mrbmacs");
+    bridge_class = mrb_class_get_under(
+      mrbmacs_mrb, mrbmacs, "ScintillaNotificationBridge"
+    );
+    notification_bridge = mrb_funcall(
+      mrbmacs_mrb, mrb_obj_value(bridge_class), "new", 0
+    );
+    mrb_funcall(
+      mrbmacs_mrb, mrbmacs_view, "notification_callback=", 1,
+      notification_bridge
+    );
+    if (mrbmacs_mrb->exc != NULL) {
+      print_mruby_error(mrbmacs_mrb);
+      mrb_gc_unregister(mrbmacs_mrb, mrbmacs_view);
+      mrb_close(mrbmacs_mrb);
+      return EXIT_FAILURE;
+    }
 
     set_editor_text(mrbmacs_mrb, mrbmacs_view, initial_text(argc, argv));
     native_handle = mrb_funcall(
