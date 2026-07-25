@@ -158,6 +158,18 @@ assert('Cocoa layout starts with one frame, one tab, and one pane') do
   assert_equal 1234, pane.native_handle
 end
 
+assert('Cocoa layout exposes the shared frame and edit-window interface') do
+  view = CocoaViewForLayoutTest.new
+  pane = Mrbmacs::PaneCocoa.new(view)
+  frame = Mrbmacs::FrameCocoa.new(Mrbmacs::TabCocoa.new(pane))
+
+  assert_kind_of Mrbmacs::FrameBase, frame
+  assert_same view, pane.sci
+  assert_same view, frame.view_win
+  assert_same pane, frame.edit_win
+  assert_equal [pane], frame.edit_win_list
+end
+
 assert('Mrbmacs::TabCocoa is a layout and not a buffer') do
   buffer = Mrbmacs::Buffer.new('*scratch*')
   pane = Mrbmacs::PaneCocoa.new(CocoaViewForLayoutTest.new, buffer)

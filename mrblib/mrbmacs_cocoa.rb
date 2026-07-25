@@ -34,6 +34,11 @@ module Mrbmacs
     def native_handle
       @view.native_handle
     end
+
+    # EditWindow-compatible access used by shared editor commands.
+    def sci
+      @view
+    end
   end
 
   # One tab represents a complete editor layout, not a buffer.
@@ -48,7 +53,7 @@ module Mrbmacs
   end
 
   # One native macOS window containing one or more tabs.
-  class FrameCocoa
+  class FrameCocoa < FrameBase
     attr_reader :tabs
     attr_accessor :active_tab, :native_handle
 
@@ -64,6 +69,21 @@ module Mrbmacs
 
     def view
       active_pane.view
+    end
+
+    # FrameBase-compatible accessors are derived from the active layout. They
+    # are not separate state, so changing tabs or panes cannot leave stale
+    # view/edit-window references behind.
+    def view_win
+      view
+    end
+
+    def edit_win
+      active_pane
+    end
+
+    def edit_win_list
+      @active_tab.panes
     end
   end
 
