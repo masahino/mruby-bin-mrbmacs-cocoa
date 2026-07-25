@@ -9,15 +9,26 @@ module Mrbmacs
   end
 
   # A single editor area. A pane owns its Scintilla view and displays one
-  # buffer. The buffer will be connected when ApplicationCocoa is integrated.
+  # buffer.
   class PaneCocoa
     attr_reader :view
-    attr_accessor :buffer
+    attr_reader :buffer
 
     def initialize(view, buffer = nil)
       @view = view
-      @buffer = buffer
+      @buffer = nil
       @view.notification_callback = ScintillaNotificationBridge.new
+      self.buffer = buffer unless buffer.nil?
+    end
+
+    def buffer=(buffer)
+      if buffer.docpointer.nil?
+        buffer.docpointer = @view.sci_get_docpointer
+      elsif @view.sci_get_docpointer != buffer.docpointer
+        @view.sci_add_refdocument(buffer.docpointer)
+        @view.sci_set_docpointer(buffer.docpointer)
+      end
+      @buffer = buffer
     end
 
     def native_handle

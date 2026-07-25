@@ -94,10 +94,12 @@ main(int argc, char **argv)
     struct RClass *scintilla;
     struct RClass *view_class;
     struct RClass *mrbmacs;
+    struct RClass *buffer_class;
     struct RClass *pane_class;
     struct RClass *tab_class;
     struct RClass *frame_class;
     mrb_value mrbmacs_view;
+    mrb_value buffer;
     mrb_value pane;
     mrb_value tab;
     mrb_value native_handle;
@@ -124,7 +126,13 @@ main(int argc, char **argv)
       mrb_close(mrbmacs_mrb);
       return EXIT_FAILURE;
     }
+    /* C retains and uses the native handle for the lifetime of the app, so
+       keep its mruby wrapper registered for the same lifetime. */
+    mrb_gc_register(mrbmacs_mrb, mrbmacs_view);
     mrbmacs = mrb_module_get(mrbmacs_mrb, "Mrbmacs");
+    buffer_class = mrb_class_get_under(
+      mrbmacs_mrb, mrbmacs, "Buffer"
+    );
     pane_class = mrb_class_get_under(
       mrbmacs_mrb, mrbmacs, "PaneCocoa"
     );
@@ -135,12 +143,33 @@ main(int argc, char **argv)
       mrbmacs_mrb, mrbmacs, "FrameCocoa"
     );
 
-    pane = mrb_funcall(
-      mrbmacs_mrb, mrb_obj_value(pane_class), "new", 1, mrbmacs_view
+    buffer = mrb_funcall(
+      mrbmacs_mrb, mrb_obj_value(buffer_class), "new", 1,
+      argc > 1 ? mrb_str_new_cstr(mrbmacs_mrb, argv[1])
+               : mrb_str_new_lit(mrbmacs_mrb, "*scratch*")
     );
+    if (mrbmacs_mrb->exc != NULL) {
+      print_mruby_error(mrbmacs_mrb);
+      mrb_close(mrbmacs_mrb);
+      return EXIT_FAILURE;
+    }
+    pane = mrb_funcall(
+      mrbmacs_mrb, mrb_obj_value(pane_class), "new", 2,
+      mrbmacs_view, buffer
+    );
+    if (mrbmacs_mrb->exc != NULL) {
+      print_mruby_error(mrbmacs_mrb);
+      mrb_close(mrbmacs_mrb);
+      return EXIT_FAILURE;
+    }
     tab = mrb_funcall(
       mrbmacs_mrb, mrb_obj_value(tab_class), "new", 1, pane
     );
+    if (mrbmacs_mrb->exc != NULL) {
+      print_mruby_error(mrbmacs_mrb);
+      mrb_close(mrbmacs_mrb);
+      return EXIT_FAILURE;
+    }
     mrbmacs_frame = mrb_funcall(
       mrbmacs_mrb, mrb_obj_value(frame_class), "new", 1, tab
     );
@@ -185,6 +214,7 @@ main(int argc, char **argv)
     [application run];
 
     mrb_gc_unregister(mrbmacs_mrb, mrbmacs_frame);
+    mrb_gc_unregister(mrbmacs_mrb, mrbmacs_view);
     mrb_close(mrbmacs_mrb);
   }
 
