@@ -12,6 +12,7 @@ The initial implementation:
 - forwards Scintilla notifications to the active mrbmacs application;
 - represents the initial editor as one frame, one layout tab, and one pane;
 - connects the pane's Scintilla document to an `Mrbmacs::Buffer`;
+- creates an `ApplicationCocoa` that owns the initial frame and buffer;
 - opens a file passed on the command line;
 - provides a standard application menu and Quit command.
 
