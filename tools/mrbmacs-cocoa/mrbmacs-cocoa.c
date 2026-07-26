@@ -9,6 +9,11 @@ static mrb_state *mrbmacs_mrb;
 static mrb_value mrbmacs_frame;
 static mrb_value mrbmacs_app;
 static id key_event_monitor;
+static NSView *mrbmacs_echo_native_view;
+
+enum {
+  MRBMACS_MODAL_RESPONSE_TAB = 1001
+};
 
 static void print_mruby_error(mrb_state *mrb);
 
@@ -19,6 +24,24 @@ mrbmacs_frame_exit(mrb_state *mrb, mrb_value self)
   (void)self;
   [NSApp terminate:nil];
   return mrb_nil_value();
+}
+
+static mrb_value
+mrbmacs_frame_wait_echo_event(mrb_state *mrb, mrb_value self)
+{
+  NSModalResponse response;
+  mrb_value echo_win;
+
+  echo_win = mrb_iv_get(mrb, self, mrb_intern_lit(mrb, "@echo_win"));
+  mrb_funcall(mrb, echo_win, "sci_grab_focus", 0);
+  response = [NSApp runModalForWindow:NSApp.keyWindow];
+  if (response == NSModalResponseOK) {
+    return mrb_symbol_value(mrb_intern_lit(mrb, "enter"));
+  }
+  if (response == MRBMACS_MODAL_RESPONSE_TAB) {
+    return mrb_symbol_value(mrb_intern_lit(mrb, "tab"));
+  }
+  return mrb_symbol_value(mrb_intern_lit(mrb, "cancel"));
 }
 
 static NSString *
@@ -69,8 +92,28 @@ mrbmacs_handle_key_event(NSEvent *event)
 {
   NSString *key = mrbmacs_key_name(event);
   mrb_value handled;
+  NSResponder *responder;
 
   if (key == nil) {
+    return event;
+  }
+  responder = NSApp.keyWindow.firstResponder;
+  if (NSApp.modalWindow != nil &&
+      ([responder isEqual:mrbmacs_echo_native_view] ||
+       ([responder isKindOfClass:[NSView class]] &&
+        [(NSView *)responder isDescendantOf:mrbmacs_echo_native_view]))) {
+    if ([key isEqualToString:@"Enter"]) {
+      [NSApp stopModalWithCode:NSModalResponseOK];
+      return nil;
+    }
+    if ([key isEqualToString:@"C-g"]) {
+      [NSApp stopModalWithCode:NSModalResponseCancel];
+      return nil;
+    }
+    if ([key isEqualToString:@"Tab"]) {
+      [NSApp stopModalWithCode:MRBMACS_MODAL_RESPONSE_TAB];
+      return nil;
+    }
     return event;
   }
   handled = mrb_funcall(
@@ -136,11 +179,15 @@ main(int argc, char **argv)
     struct RClass *frame_class;
     struct RClass *application_class;
     mrb_value mrbmacs_view;
+    mrb_value mrbmacs_echo_view;
     mrb_value buffer;
     mrb_value pane;
     mrb_value tab;
     mrb_value native_handle;
+    mrb_value echo_native_handle;
     NSView *view;
+    NSView *echo_view;
+    CGFloat echo_height = 24.0;
 
     [application setActivationPolicy:NSApplicationActivationPolicyRegular];
     create_application_menu();
@@ -166,6 +213,15 @@ main(int argc, char **argv)
     /* C retains and uses the native handle for the lifetime of the app, so
        keep its mruby wrapper registered for the same lifetime. */
     mrb_gc_register(mrbmacs_mrb, mrbmacs_view);
+    mrbmacs_echo_view = mrb_funcall(
+      mrbmacs_mrb, mrb_obj_value(view_class), "new", 0
+    );
+    if (mrbmacs_mrb->exc != NULL) {
+      print_mruby_error(mrbmacs_mrb);
+      mrb_close(mrbmacs_mrb);
+      return EXIT_FAILURE;
+    }
+    mrb_gc_register(mrbmacs_mrb, mrbmacs_echo_view);
     mrbmacs = mrb_module_get(mrbmacs_mrb, "Mrbmacs");
     buffer_class = mrb_class_get_under(
       mrbmacs_mrb, mrbmacs, "Buffer"
@@ -181,6 +237,10 @@ main(int argc, char **argv)
     );
     mrb_define_method(
       mrbmacs_mrb, frame_class, "exit", mrbmacs_frame_exit, MRB_ARGS_NONE()
+    );
+    mrb_define_method(
+      mrbmacs_mrb, frame_class, "wait_echo_event",
+      mrbmacs_frame_wait_echo_event, MRB_ARGS_NONE()
     );
     application_class = mrb_class_get_under(
       mrbmacs_mrb, mrbmacs, "ApplicationCocoa"
@@ -214,7 +274,8 @@ main(int argc, char **argv)
       return EXIT_FAILURE;
     }
     mrbmacs_frame = mrb_funcall(
-      mrbmacs_mrb, mrb_obj_value(frame_class), "new", 1, tab
+      mrbmacs_mrb, mrb_obj_value(frame_class), "new", 2,
+      tab, mrbmacs_echo_view
     );
     if (mrbmacs_mrb->exc != NULL) {
       print_mruby_error(mrbmacs_mrb);
@@ -247,19 +308,15 @@ main(int argc, char **argv)
       mrbmacs_mrb, mrbmacs_frame, "view", 0
     );
 
-    mrb_funcall(
-      mrbmacs_mrb, mrbmacs_app, "load_initial_file", 1,
-      argc > 1 ? mrb_str_new_cstr(mrbmacs_mrb, argv[1]) : mrb_nil_value()
-    );
-    if (mrbmacs_mrb->exc != NULL) {
-      print_mruby_error(mrbmacs_mrb);
-      mrb_close(mrbmacs_mrb);
-      return EXIT_FAILURE;
-    }
     native_handle = mrb_funcall(
       mrbmacs_mrb, mrbmacs_view, "native_handle", 0
     );
     view = (NSView *)(intptr_t)mrb_integer(native_handle);
+    echo_native_handle = mrb_funcall(
+      mrbmacs_mrb, mrbmacs_echo_view, "native_handle", 0
+    );
+    echo_view = (NSView *)(intptr_t)mrb_integer(echo_native_handle);
+    mrbmacs_echo_native_view = echo_view;
 
     window = [
       [[NSWindow alloc]
@@ -274,12 +331,32 @@ main(int argc, char **argv)
       mrbmacs_mrb, mrbmacs_frame, "native_handle=", 1,
       mrb_int_value(mrbmacs_mrb, (mrb_int)(intptr_t)window)
     );
-    [view setFrame:window.contentView.bounds];
+    [view setFrame:NSMakeRect(
+      0,
+      echo_height,
+      window.contentView.bounds.size.width,
+      window.contentView.bounds.size.height - echo_height
+    )];
     [view setAutoresizingMask:NSViewWidthSizable | NSViewHeightSizable];
+    [echo_view setFrame:NSMakeRect(
+      0, 0, window.contentView.bounds.size.width, echo_height
+    )];
+    [echo_view setAutoresizingMask:NSViewWidthSizable | NSViewMaxYMargin];
     [window.contentView addSubview:view];
+    [window.contentView addSubview:echo_view];
     [window center];
     [window makeKeyAndOrderFront:nil];
     [window makeFirstResponder:view];
+
+    mrb_funcall(
+      mrbmacs_mrb, mrbmacs_app, "load_initial_file", 1,
+      argc > 1 ? mrb_str_new_cstr(mrbmacs_mrb, argv[1]) : mrb_nil_value()
+    );
+    if (mrbmacs_mrb->exc != NULL) {
+      print_mruby_error(mrbmacs_mrb);
+      mrb_close(mrbmacs_mrb);
+      return EXIT_FAILURE;
+    }
 
     [application activateIgnoringOtherApps:YES];
     [application run];
@@ -287,6 +364,7 @@ main(int argc, char **argv)
     [NSEvent removeMonitor:key_event_monitor];
     mrb_gc_unregister(mrbmacs_mrb, mrbmacs_app);
     mrb_gc_unregister(mrbmacs_mrb, mrbmacs_frame);
+    mrb_gc_unregister(mrbmacs_mrb, mrbmacs_echo_view);
     mrb_gc_unregister(mrbmacs_mrb, mrbmacs_view);
     mrb_close(mrbmacs_mrb);
   }

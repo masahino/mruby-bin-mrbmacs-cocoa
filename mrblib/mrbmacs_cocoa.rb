@@ -54,15 +54,23 @@ module Mrbmacs
 
   # One native macOS window containing one or more tabs.
   class FrameCocoa < FrameBase
+    attr_reader :echo_win
     attr_reader :tabs
     attr_reader :last_message
     attr_accessor :active_tab, :native_handle
 
-    def initialize(tab)
+    def initialize(tab, echo_win = nil)
       @tabs = [tab]
       @active_tab = tab
+      @echo_win = echo_win
       @native_handle = nil
       @last_message = nil
+      view.sci_set_hscrollbar(false)
+      unless @echo_win.nil?
+        @echo_win.sci_set_hscrollbar(false)
+        @echo_win.sci_set_vscrollbar(false)
+        @echo_win.sci_set_margin_typen(3, 4)
+      end
     end
 
     def active_pane
@@ -88,11 +96,74 @@ module Mrbmacs
       @active_tab.panes
     end
 
-    # Until the Cocoa echo area is introduced, retain the message for UI
-    # integration and make failures visible to terminal-launched builds.
     def echo_puts(text)
       @last_message = text.to_s
-      $stderr.puts @last_message
+      if @echo_win.nil?
+        $stderr.puts @last_message
+      else
+        @echo_win.sci_clear_all
+        @echo_win.sci_add_text(@last_message.bytesize, @last_message)
+        @echo_win.sci_document_end
+      end
+    end
+
+    def echo_set_prompt(prompt)
+      width = @echo_win.sci_text_width(Scintilla::STYLE_DEFAULT, prompt)
+      @echo_win.sci_set_margin_widthn(3, width)
+      @echo_win.sci_margin_set_text(0, prompt)
+    end
+
+    def echo_gets(prompt, text = '', &block)
+      @echo_win.sci_clear_all
+      echo_set_prompt(prompt)
+      @echo_win.sci_add_text(text.bytesize, text)
+      input = nil
+
+      loop do
+        case wait_echo_event
+        when :cancel
+          break
+        when :enter
+          if @echo_win.sci_autoc_active
+            @echo_win.sci_autoc_complete
+          else
+            input = @echo_win.sci_get_line(0)
+            break
+          end
+        when :tab
+          complete_echo_input(block) unless block.nil?
+        end
+      end
+      input
+    ensure
+      @echo_win.sci_autoc_cancel unless @echo_win.nil?
+      @echo_win.sci_clear_all unless @echo_win.nil?
+      echo_set_prompt('') unless @echo_win.nil?
+      view.sci_grab_focus
+    end
+
+    def complete_echo_input(block)
+      input_text = @echo_win.sci_get_line(0)
+      was_active = @echo_win.sci_autoc_active
+      @echo_win.sci_autoc_cancel if was_active
+      completion_list, length = block.call(input_text)
+
+      if was_active
+        candidates = completion_list.split(
+          @echo_win.sci_autoc_get_separator.chr
+        )
+        common = Mrbmacs.common_prefix(candidates)
+        unless common.nil?
+          suffix = common[length..]
+          @echo_win.sci_add_text(suffix.bytesize, suffix) unless suffix.nil?
+          length = common.length
+        end
+      end
+      @echo_win.sci_autoc_show(length, completion_list)
+    end
+
+    def wait_echo_event
+      raise NotImplementedError
     end
   end
 
@@ -106,6 +177,7 @@ module Mrbmacs
       @buffer_list = [buffer]
       @keymap = ViewKeyMap.new
       @prefix_key = ''
+      @command_list = Mrbmacs::Command.instance_methods.map(&:to_s).sort
     end
 
     def sci_notify(notification)
