@@ -112,6 +112,10 @@ class CocoaViewForLayoutTest
     @save_point = true
   end
 
+  def sci_set_savepoint
+    @save_point = true
+  end
+
   def sci_marker_delete_all(_marker)
   end
 
@@ -167,6 +171,39 @@ assert('Mrbmacs::ApplicationCocoa owns its Cocoa frame and initial buffer') do
   assert_equal [buffer], app.buffer_list
   assert_equal({}, app.sci_handler)
   assert_kind_of Mrbmacs::Config, app.config
+end
+
+assert('Mrbmacs::ApplicationCocoa starts a missing path as a new file') do
+  filename = "#{ENV['TMPDIR'] || '/tmp'}/mrbmacs-cocoa-new-#{$$}.txt"
+  File.delete(filename) if File.exist?(filename)
+  buffer = Mrbmacs::Buffer.new(filename)
+  view = CocoaViewForLayoutTest.new
+  frame = Mrbmacs::FrameCocoa.new(
+    Mrbmacs::TabCocoa.new(Mrbmacs::PaneCocoa.new(view, buffer))
+  )
+  app = Mrbmacs::ApplicationCocoa.new(frame, buffer)
+
+  app.load_initial_file(filename)
+
+  assert_equal '', view.text
+  assert_true view.save_point
+  assert_equal 'New file', frame.last_message
+  assert_equal File.expand_path(filename), app.current_buffer.filename
+end
+
+assert('Mrbmacs::ApplicationCocoa starts scratch as an empty saved document') do
+  buffer = Mrbmacs::Buffer.new('*scratch*')
+  view = CocoaViewForLayoutTest.new
+  frame = Mrbmacs::FrameCocoa.new(
+    Mrbmacs::TabCocoa.new(Mrbmacs::PaneCocoa.new(view, buffer))
+  )
+  app = Mrbmacs::ApplicationCocoa.new(frame, buffer)
+
+  app.load_initial_file
+
+  assert_equal '', view.text
+  assert_true view.save_point
+  assert_nil frame.last_message
 end
 
 
