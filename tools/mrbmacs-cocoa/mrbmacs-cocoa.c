@@ -92,46 +92,6 @@ print_mruby_error(mrb_state *mrb)
   }
 }
 
-static mrb_value
-scintilla_constant(mrb_state *mrb, const char *name)
-{
-  struct RClass *module = mrb_module_get(mrb, "Scintilla");
-  return mrb_const_get(mrb, mrb_obj_value(module), mrb_intern_cstr(mrb, name));
-}
-
-static void
-set_editor_text(mrb_state *mrb, mrb_value view, NSString *text)
-{
-  NSData *data = [text dataUsingEncoding:NSUTF8StringEncoding];
-  mrb_value bytes = mrb_str_new(mrb, data.bytes, (mrb_int)data.length);
-  mrb_value set_text = scintilla_constant(mrb, "SCI_SETTEXT");
-
-  mrb_funcall(
-    mrb, view, "send_message", 3,
-    set_text, mrb_fixnum_value(0), bytes
-  );
-}
-
-static NSString *
-initial_text(int argc, char **argv)
-{
-  if (argc > 1) {
-    NSString *path = [NSString stringWithUTF8String:argv[1]];
-    NSError *error = nil;
-    NSString *contents = [
-      NSString stringWithContentsOfFile:path
-      encoding:NSUTF8StringEncoding
-      error:&error
-    ];
-    if (contents != nil) {
-      return contents;
-    }
-    return [NSString stringWithFormat:@"Unable to open %@\n%@\n", path, error];
-  }
-
-  return @"mrbmacs Cocoa\n\nScintilla Cocoa is running.\n";
-}
-
 static void
 create_application_menu(void)
 {
@@ -287,13 +247,10 @@ main(int argc, char **argv)
       mrbmacs_mrb, mrbmacs_frame, "view", 0
     );
 
-    set_editor_text(mrbmacs_mrb, mrbmacs_view, initial_text(argc, argv));
-    if (mrbmacs_mrb->exc != NULL) {
-      print_mruby_error(mrbmacs_mrb);
-      mrb_close(mrbmacs_mrb);
-      return EXIT_FAILURE;
-    }
-    mrb_funcall(mrbmacs_mrb, mrbmacs_view, "sci_set_save_point", 0);
+    mrb_funcall(
+      mrbmacs_mrb, mrbmacs_app, "load_initial_file", 1,
+      argc > 1 ? mrb_str_new_cstr(mrbmacs_mrb, argv[1]) : mrb_nil_value()
+    );
     if (mrbmacs_mrb->exc != NULL) {
       print_mruby_error(mrbmacs_mrb);
       mrb_close(mrbmacs_mrb);

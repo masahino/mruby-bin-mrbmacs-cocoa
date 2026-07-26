@@ -113,6 +113,14 @@ module Mrbmacs
       call_sci_event(notification)
     end
 
+    # Use the shared file-loading path for command-line files as well as files
+    # opened after startup. A missing path therefore starts as an empty new
+    # file instead of placing an error message in the editor document.
+    def load_initial_file(filename = nil)
+      open_file(filename) unless filename.nil?
+      @frame.view.sci_set_save_point
+    end
+
     # Cocoa terminates its native event loop through FrameCocoa#exit. Avoid
     # raising SystemExit while handling an NSEvent callback.
     def save_buffers_kill_terminal
