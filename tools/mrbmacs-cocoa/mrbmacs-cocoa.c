@@ -12,6 +12,15 @@ static id key_event_monitor;
 
 static void print_mruby_error(mrb_state *mrb);
 
+static mrb_value
+mrbmacs_frame_exit(mrb_state *mrb, mrb_value self)
+{
+  (void)mrb;
+  (void)self;
+  [NSApp terminate:nil];
+  return mrb_nil_value();
+}
+
 static NSString *
 mrbmacs_key_name(NSEvent *event)
 {
@@ -34,6 +43,9 @@ mrbmacs_key_name(NSEvent *event)
   }
 
   switch ([characters characterAtIndex:0]) {
+  case 0x00:
+    characters = @" ";
+    break;
   case 0x1b:
     return @"Escape";
   case '\r':
@@ -207,6 +219,9 @@ main(int argc, char **argv)
     frame_class = mrb_class_get_under(
       mrbmacs_mrb, mrbmacs, "FrameCocoa"
     );
+    mrb_define_method(
+      mrbmacs_mrb, frame_class, "exit", mrbmacs_frame_exit, MRB_ARGS_NONE()
+    );
     application_class = mrb_class_get_under(
       mrbmacs_mrb, mrbmacs, "ApplicationCocoa"
     );
@@ -273,6 +288,17 @@ main(int argc, char **argv)
     );
 
     set_editor_text(mrbmacs_mrb, mrbmacs_view, initial_text(argc, argv));
+    if (mrbmacs_mrb->exc != NULL) {
+      print_mruby_error(mrbmacs_mrb);
+      mrb_close(mrbmacs_mrb);
+      return EXIT_FAILURE;
+    }
+    mrb_funcall(mrbmacs_mrb, mrbmacs_view, "sci_set_save_point", 0);
+    if (mrbmacs_mrb->exc != NULL) {
+      print_mruby_error(mrbmacs_mrb);
+      mrb_close(mrbmacs_mrb);
+      return EXIT_FAILURE;
+    }
     native_handle = mrb_funcall(
       mrbmacs_mrb, mrbmacs_view, "native_handle", 0
     );

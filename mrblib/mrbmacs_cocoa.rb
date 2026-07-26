@@ -113,12 +113,28 @@ module Mrbmacs
       call_sci_event(notification)
     end
 
+    # Cocoa terminates its native event loop through FrameCocoa#exit. Avoid
+    # raising SystemExit while handling an NSEvent callback.
+    def save_buffers_kill_terminal
+      before_save_buffers_kill_terminal(self)
+      @frame.exit
+    end
+
     # Returns true only when mrbmacs consumed the key. Unhandled keys continue
     # through Scintilla's Cocoa text input path, including IME composition.
     def key_press(key)
+      if key == 'Escape'
+        add_recent_key(key)
+        @prefix_key = 'M-'
+        return true
+      end
+
       key_sequence = "#{@prefix_key}#{key}"
       command = key_scan(key_sequence)
-      return false if command.nil?
+      if command.nil?
+        @prefix_key = ''
+        return false
+      end
 
       add_recent_key(key)
       if command.is_a?(Integer)
