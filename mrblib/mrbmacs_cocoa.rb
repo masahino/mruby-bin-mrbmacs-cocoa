@@ -55,12 +55,14 @@ module Mrbmacs
   # One native macOS window containing one or more tabs.
   class FrameCocoa < FrameBase
     attr_reader :tabs
+    attr_reader :last_message
     attr_accessor :active_tab, :native_handle
 
     def initialize(tab)
       @tabs = [tab]
       @active_tab = tab
       @native_handle = nil
+      @last_message = nil
     end
 
     def active_pane
@@ -85,12 +87,20 @@ module Mrbmacs
     def edit_win_list
       @active_tab.panes
     end
+
+    # Until the Cocoa echo area is introduced, retain the message for UI
+    # integration and make failures visible to terminal-launched builds.
+    def echo_puts(text)
+      @last_message = text.to_s
+      $stderr.puts @last_message
+    end
   end
 
   # Native macOS mrbmacs application.
   class ApplicationCocoa < Application
     def initialize(frame, buffer)
       init_instance_variables
+      @logger = init_logfile
       @frame = frame
       @current_buffer = buffer
       @buffer_list = [buffer]
@@ -103,12 +113,28 @@ module Mrbmacs
       call_sci_event(notification)
     end
 
+    # Cocoa terminates its native event loop through FrameCocoa#exit. Avoid
+    # raising SystemExit while handling an NSEvent callback.
+    def save_buffers_kill_terminal
+      before_save_buffers_kill_terminal(self)
+      @frame.exit
+    end
+
     # Returns true only when mrbmacs consumed the key. Unhandled keys continue
     # through Scintilla's Cocoa text input path, including IME composition.
     def key_press(key)
+      if key == 'Escape'
+        add_recent_key(key)
+        @prefix_key = 'M-'
+        return true
+      end
+
       key_sequence = "#{@prefix_key}#{key}"
       command = key_scan(key_sequence)
-      return false if command.nil?
+      if command.nil?
+        @prefix_key = ''
+        return false
+      end
 
       add_recent_key(key)
       if command.is_a?(Integer)
@@ -117,10 +143,8 @@ module Mrbmacs
       elsif command == 'prefix'
         @prefix_key = "#{key_sequence} "
       else
-        # Ruby editor commands need the echo/modeline frame adapter, which is
-        # intentionally introduced in the next integration step.
+        extend(command)
         @prefix_key = ''
-        return false
       end
       true
     end
