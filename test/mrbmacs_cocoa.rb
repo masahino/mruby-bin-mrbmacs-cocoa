@@ -19,13 +19,16 @@ end
 
 class CocoaViewForLayoutTest
   attr_accessor :notification_callback
-  attr_reader :added_documents, :set_documents, :messages
+  attr_accessor :text
+  attr_reader :added_documents, :set_documents, :messages, :save_point
 
   def initialize(docpointer = 100)
     @docpointer = docpointer
     @added_documents = []
     @set_documents = []
     @messages = []
+    @text = ''
+    @save_point = false
   end
 
   def sci_get_docpointer
@@ -43,6 +46,25 @@ class CocoaViewForLayoutTest
 
   def send_message(message)
     @messages << message
+  end
+
+  def sci_home
+    @messages << Scintilla::SCI_HOME
+  end
+
+  def sci_get_length
+    @text.bytesize
+  end
+
+  def sci_get_text(_length)
+    @text
+  end
+
+  def sci_set_save_point
+    @save_point = true
+  end
+
+  def sci_marker_delete_all(_marker)
   end
 
   def native_handle
@@ -137,6 +159,40 @@ assert('Mrbmacs::ApplicationCocoa leaves text input to Cocoa') do
 
   assert_false app.key_press('a')
   assert_equal [], view.messages
+end
+
+
+assert('Mrbmacs::ApplicationCocoa runs a shared Ruby editor command') do
+  buffer = Mrbmacs::Buffer.new('*scratch*')
+  view = CocoaViewForLayoutTest.new
+  frame = Mrbmacs::FrameCocoa.new(
+    Mrbmacs::TabCocoa.new(Mrbmacs::PaneCocoa.new(view, buffer))
+  )
+  app = Mrbmacs::ApplicationCocoa.new(frame, buffer)
+
+  assert_true app.key_press('C-a')
+  assert_equal [Scintilla::SCI_HOME], view.messages
+end
+
+
+assert('Mrbmacs::ApplicationCocoa saves through a shared Ruby command') do
+  filename = "#{ENV['TMPDIR'] || '/tmp'}/mrbmacs-cocoa-save-#{$$}.txt"
+  buffer = Mrbmacs::Buffer.new(filename)
+  view = CocoaViewForLayoutTest.new
+  view.text = "saved from Cocoa\n"
+  frame = Mrbmacs::FrameCocoa.new(
+    Mrbmacs::TabCocoa.new(Mrbmacs::PaneCocoa.new(view, buffer))
+  )
+  app = Mrbmacs::ApplicationCocoa.new(frame, buffer)
+
+  begin
+    assert_true app.key_press('C-x')
+    assert_true app.key_press('C-s')
+    assert_equal "saved from Cocoa\n", File.read(filename)
+    assert_true view.save_point
+  ensure
+    File.delete(filename) if File.exist?(filename)
+  end
 end
 
 
