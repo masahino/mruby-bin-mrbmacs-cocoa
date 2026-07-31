@@ -18,9 +18,14 @@ The initial implementation:
 - exposes the active Cocoa pane through the shared Frame/EditWindow interface;
 - executes shared Ruby editor commands, including basic movement and saving;
 - opens a file passed on the command line;
+- opens existing and new files with `C-x C-f`;
+- provides an echo area with minibuffer input and completion;
+- executes commands by name with `M-x`;
+- switches buffers with `C-x b` and kills buffers with `C-x k`;
+- displays the shared mrbmacs mode line in each Cocoa pane;
 - provides a standard application menu and Quit command.
 
-Editor commands, modelines, multiple buffers, and the complete
+Search, replace, pane splitting, native tabs, and the remaining
 `mruby-mrbmacs-base` integration will be added incrementally.
 
 Tabs represent complete pane layouts rather than individual buffers. This

@@ -206,7 +206,22 @@ module Mrbmacs
       end
     end
 
+    def y_or_n(prompt)
+      @echo_win.sci_clear_all
+      echo_set_prompt(prompt)
+      wait_confirmation_event == :yes
+    ensure
+      @echo_win.sci_clear_all unless @echo_win.nil?
+      echo_set_prompt('') unless @echo_win.nil?
+      view.sci_grab_focus
+    end
+
     def wait_echo_event
+      raise NotImplementedError
+    end
+
+
+    def wait_confirmation_event
       raise NotImplementedError
     end
   end

@@ -10,9 +10,12 @@ static mrb_value mrbmacs_frame;
 static mrb_value mrbmacs_app;
 static id key_event_monitor;
 static NSView *mrbmacs_echo_native_view;
+static BOOL mrbmacs_confirmation_input;
 
 enum {
-  MRBMACS_MODAL_RESPONSE_TAB = 1001
+  MRBMACS_MODAL_RESPONSE_TAB = 1001,
+  MRBMACS_MODAL_RESPONSE_YES,
+  MRBMACS_MODAL_RESPONSE_NO
 };
 
 static void print_mruby_error(mrb_state *mrb);
@@ -42,6 +45,23 @@ mrbmacs_frame_wait_echo_event(mrb_state *mrb, mrb_value self)
     return mrb_symbol_value(mrb_intern_lit(mrb, "tab"));
   }
   return mrb_symbol_value(mrb_intern_lit(mrb, "cancel"));
+}
+
+static mrb_value
+mrbmacs_frame_wait_confirmation_event(mrb_state *mrb, mrb_value self)
+{
+  NSModalResponse response;
+  mrb_value echo_win;
+
+  echo_win = mrb_iv_get(mrb, self, mrb_intern_lit(mrb, "@echo_win"));
+  mrb_funcall(mrb, echo_win, "sci_grab_focus", 0);
+  mrbmacs_confirmation_input = YES;
+  response = [NSApp runModalForWindow:NSApp.keyWindow];
+  mrbmacs_confirmation_input = NO;
+  if (response == MRBMACS_MODAL_RESPONSE_YES) {
+    return mrb_symbol_value(mrb_intern_lit(mrb, "yes"));
+  }
+  return mrb_symbol_value(mrb_intern_lit(mrb, "no"));
 }
 
 static mrb_value
@@ -121,6 +141,17 @@ mrbmacs_handle_key_event(NSEvent *event)
       ([responder isEqual:mrbmacs_echo_native_view] ||
        ([responder isKindOfClass:[NSView class]] &&
         [(NSView *)responder isDescendantOf:mrbmacs_echo_native_view]))) {
+    if (mrbmacs_confirmation_input) {
+      if ([key isEqualToString:@"y"]) {
+        [NSApp stopModalWithCode:MRBMACS_MODAL_RESPONSE_YES];
+        return nil;
+      }
+      if ([key isEqualToString:@"n"] || [key isEqualToString:@"C-g"]) {
+        [NSApp stopModalWithCode:MRBMACS_MODAL_RESPONSE_NO];
+        return nil;
+      }
+      return nil;
+    }
     if ([key isEqualToString:@"Enter"]) {
       [NSApp stopModalWithCode:NSModalResponseOK];
       return nil;
@@ -266,6 +297,10 @@ main(int argc, char **argv)
     mrb_define_method(
       mrbmacs_mrb, frame_class, "wait_echo_event",
       mrbmacs_frame_wait_echo_event, MRB_ARGS_NONE()
+    );
+    mrb_define_method(
+      mrbmacs_mrb, frame_class, "wait_confirmation_event",
+      mrbmacs_frame_wait_confirmation_event, MRB_ARGS_NONE()
     );
     application_class = mrb_class_get_under(
       mrbmacs_mrb, mrbmacs, "ApplicationCocoa"

@@ -46,6 +46,14 @@ class CocoaFrameForEchoInputTest < Mrbmacs::FrameCocoa
   end
 end
 
+class CocoaFrameForConfirmationTest < CocoaFrameForEchoInputTest
+  attr_accessor :confirmation_event
+
+  def wait_confirmation_event
+    @confirmation_event
+  end
+end
+
 class CocoaViewForLayoutTest
   attr_accessor :notification_callback
   attr_accessor :current_pos
@@ -378,6 +386,24 @@ assert('Mrbmacs::ApplicationCocoa switches safely with only one buffer') do
   assert_equal [buffer], app.buffer_list
 end
 
+assert('Mrbmacs::ApplicationCocoa kills a buffer through shared command') do
+  buffer = Mrbmacs::Buffer.new('*scratch*')
+  view = CocoaViewForLayoutTest.new
+  echo_win = CocoaViewForLayoutTest.new
+  frame = CocoaFrameForConfirmationTest.new(
+    Mrbmacs::TabCocoa.new(Mrbmacs::PaneCocoa.new(view, buffer)), echo_win
+  )
+  app = Mrbmacs::ApplicationCocoa.new(frame, buffer)
+  filename = "#{ENV['TMPDIR'] || '/tmp'}/mrbmacs-kill-#{$$}.txt"
+  app.find_file(filename)
+  frame.input_events = [[:enter, '']]
+
+  assert_true app.key_press('C-x')
+  assert_true app.key_press('k')
+  assert_equal ['*scratch*'], app.buffer_list.map(&:name)
+  assert_equal '*scratch*', app.current_buffer.name
+end
+
 
 assert('Mrbmacs::ApplicationCocoa handles a Scintilla key command') do
   buffer = Mrbmacs::Buffer.new('*scratch*')
@@ -653,6 +679,23 @@ assert('Mrbmacs::FrameCocoa completes buffer names by prefix') do
   assert_equal 'notes.rb', result
   assert_equal [2, 'notes.rb notice.txt'], echo_win.autocomplete_lists.first
   assert_true view.messages.include?(:grab_focus)
+end
+
+assert('Mrbmacs::FrameCocoa confirms with one modal key') do
+  view = CocoaViewForLayoutTest.new
+  echo_win = CocoaViewForLayoutTest.new
+  pane = Mrbmacs::PaneCocoa.new(view)
+  frame = CocoaFrameForConfirmationTest.new(
+    Mrbmacs::TabCocoa.new(pane), echo_win
+  )
+
+  frame.confirmation_event = :yes
+  assert_true frame.y_or_n('Buffer modified; kill anyway? (y or n) ')
+  frame.confirmation_event = :no
+  assert_false frame.y_or_n('Buffer modified; kill anyway? (y or n) ')
+  assert_equal '', echo_win.text
+  assert_true view.messages.include?(:grab_focus)
+  assert_true echo_win.messages.include?([:margin_text, 0, ''])
 end
 
 assert('Mrbmacs::TabCocoa is a layout and not a buffer') do
