@@ -35,6 +35,11 @@ module Mrbmacs
       @view.native_handle
     end
 
+    # Shared recenter logic uses pixel height for GUI edit windows.
+    def height
+      @view.sci_text_height(0) * @view.sci_lines_on_screen
+    end
+
     # EditWindow-compatible access used by shared editor commands.
     def sci
       @view
@@ -94,6 +99,11 @@ module Mrbmacs
 
     def edit_win_list
       @active_tab.panes
+    end
+
+    # The Cocoa mode line will be introduced as a separate view. Keep the
+    # shared command path usable until then, as FrameBase does for buffer names.
+    def modeline(_app)
     end
 
     def echo_puts(text)
@@ -183,6 +193,18 @@ module Mrbmacs
     def sci_notify(notification)
       $stderr.puts notification['code'] if $DEBUG
       call_sci_event(notification)
+    end
+
+    # Like the terminal frontends, Cocoa currently switches documents in the
+    # active pane. Native tab creation will be added with the tab UI.
+    def add_buffer_to_frame(_buffer)
+    end
+
+    # Theme initialization is not part of the current Cocoa startup path yet.
+    def apply_theme_to_mode(mode, edit_win, theme)
+      return if theme.nil?
+
+      super
     end
 
     # Use the shared file-loading path for command-line files as well as files
