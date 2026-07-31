@@ -132,15 +132,16 @@ mrbmacs_handle_key_event(NSEvent *event)
   NSString *key = mrbmacs_key_name(event);
   mrb_value handled;
   NSResponder *responder;
+  BOOL echo_is_responder;
 
   if (key == nil) {
     return event;
   }
   responder = NSApp.keyWindow.firstResponder;
-  if (NSApp.modalWindow != nil &&
-      ([responder isEqual:mrbmacs_echo_native_view] ||
-       ([responder isKindOfClass:[NSView class]] &&
-        [(NSView *)responder isDescendantOf:mrbmacs_echo_native_view]))) {
+  echo_is_responder = [responder isEqual:mrbmacs_echo_native_view] ||
+    ([responder isKindOfClass:[NSView class]] &&
+     [(NSView *)responder isDescendantOf:mrbmacs_echo_native_view]);
+  if (NSApp.modalWindow != nil && echo_is_responder) {
     if (mrbmacs_confirmation_input) {
       if ([key isEqualToString:@"y"]) {
         [NSApp stopModalWithCode:MRBMACS_MODAL_RESPONSE_YES];
@@ -165,6 +166,17 @@ mrbmacs_handle_key_event(NSEvent *event)
       return nil;
     }
     return event;
+  }
+  if (echo_is_responder) {
+    handled = mrb_funcall(
+      mrbmacs_mrb, mrbmacs_app, "echo_key_press", 1,
+      mrb_str_new_cstr(mrbmacs_mrb, key.UTF8String)
+    );
+    if (mrbmacs_mrb->exc != NULL) {
+      print_mruby_error(mrbmacs_mrb);
+      return event;
+    }
+    return mrb_test(handled) ? nil : event;
   }
   handled = mrb_funcall(
     mrbmacs_mrb, mrbmacs_app, "key_press", 1,
