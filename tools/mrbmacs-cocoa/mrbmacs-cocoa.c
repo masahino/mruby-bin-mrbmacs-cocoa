@@ -44,6 +44,25 @@ mrbmacs_frame_wait_echo_event(mrb_state *mrb, mrb_value self)
   return mrb_symbol_value(mrb_intern_lit(mrb, "cancel"));
 }
 
+static mrb_value
+mrbmacs_pane_update_native_modeline(mrb_state *mrb, mrb_value self)
+{
+  char *text;
+  mrb_value native_handle;
+  NSTextField *modeline;
+
+  mrb_get_args(mrb, "z", &text);
+  native_handle = mrb_iv_get(
+    mrb, self, mrb_intern_lit(mrb, "@modeline_native_handle")
+  );
+  if (mrb_nil_p(native_handle)) {
+    return mrb_nil_value();
+  }
+  modeline = (NSTextField *)(intptr_t)mrb_integer(native_handle);
+  [modeline setStringValue:[NSString stringWithUTF8String:text]];
+  return mrb_nil_value();
+}
+
 static NSString *
 mrbmacs_key_name(NSEvent *event)
 {
@@ -187,7 +206,9 @@ main(int argc, char **argv)
     mrb_value echo_native_handle;
     NSView *view;
     NSView *echo_view;
+    NSTextField *modeline_view;
     CGFloat echo_height = 24.0;
+    CGFloat modeline_height = 22.0;
 
     [application setActivationPolicy:NSApplicationActivationPolicyRegular];
     create_application_menu();
@@ -228,6 +249,10 @@ main(int argc, char **argv)
     );
     pane_class = mrb_class_get_under(
       mrbmacs_mrb, mrbmacs, "PaneCocoa"
+    );
+    mrb_define_method(
+      mrbmacs_mrb, pane_class, "update_native_modeline",
+      mrbmacs_pane_update_native_modeline, MRB_ARGS_REQ(1)
     );
     tab_class = mrb_class_get_under(
       mrbmacs_mrb, mrbmacs, "TabCocoa"
@@ -327,22 +352,38 @@ main(int argc, char **argv)
       autorelease
     ];
     [window setTitle:@"mrbmacs Cocoa"];
+    modeline_view = [[[NSTextField alloc] initWithFrame:NSZeroRect] autorelease];
+    [modeline_view setEditable:NO];
+    [modeline_view setSelectable:NO];
+    [modeline_view setBezeled:NO];
+    [modeline_view setDrawsBackground:YES];
+    [modeline_view setFont:[NSFont monospacedSystemFontOfSize:12.0 weight:NSFontWeightRegular]];
+    [modeline_view setLineBreakMode:NSLineBreakByTruncatingTail];
+    mrb_funcall(
+      mrbmacs_mrb, pane, "modeline_native_handle=", 1,
+      mrb_int_value(mrbmacs_mrb, (mrb_int)(intptr_t)modeline_view)
+    );
     mrb_funcall(
       mrbmacs_mrb, mrbmacs_frame, "native_handle=", 1,
       mrb_int_value(mrbmacs_mrb, (mrb_int)(intptr_t)window)
     );
     [view setFrame:NSMakeRect(
       0,
-      echo_height,
+      echo_height + modeline_height,
       window.contentView.bounds.size.width,
-      window.contentView.bounds.size.height - echo_height
+      window.contentView.bounds.size.height - echo_height - modeline_height
     )];
     [view setAutoresizingMask:NSViewWidthSizable | NSViewHeightSizable];
+    [modeline_view setFrame:NSMakeRect(
+      0, echo_height, window.contentView.bounds.size.width, modeline_height
+    )];
+    [modeline_view setAutoresizingMask:NSViewWidthSizable | NSViewMaxYMargin];
     [echo_view setFrame:NSMakeRect(
       0, 0, window.contentView.bounds.size.width, echo_height
     )];
     [echo_view setAutoresizingMask:NSViewWidthSizable | NSViewMaxYMargin];
     [window.contentView addSubview:view];
+    [window.contentView addSubview:modeline_view];
     [window.contentView addSubview:echo_view];
     [window center];
     [window makeKeyAndOrderFront:nil];
