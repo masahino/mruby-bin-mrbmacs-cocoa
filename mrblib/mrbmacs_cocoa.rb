@@ -172,6 +172,19 @@ module Mrbmacs
       @echo_win.sci_autoc_show(length, completion_list)
     end
 
+    def select_buffer(default_buffername, buffer_list)
+      prompt = "Switch to buffer: (default #{default_buffername}) "
+      echo_gets(prompt, '') do |input_text|
+        candidates = buffer_list.select do |name|
+          name[0, input_text.length] == input_text
+        end
+        [
+          candidates.join(@echo_win.sci_autoc_get_separator.chr),
+          input_text.length
+        ]
+      end
+    end
+
     def wait_echo_event
       raise NotImplementedError
     end
@@ -198,6 +211,22 @@ module Mrbmacs
     # Like the terminal frontends, Cocoa currently switches documents in the
     # active pane. Native tab creation will be added with the tab UI.
     def add_buffer_to_frame(_buffer)
+    end
+
+    # The other frontends create *Messages* during Application initialization,
+    # so the shared switch_to_buffer implementation can use buffer_list[-2] as
+    # its default. Cocoa does not create that buffer yet and can start with only
+    # one buffer.
+    def switch_to_buffer(buffername = nil)
+      if buffername.nil? && @buffer_list.size == 1
+        buffername = @frame.select_buffer(
+          @current_buffer.name, @buffer_list.map(&:name)
+        )
+        return if buffername.nil?
+
+        buffername = @current_buffer.name if buffername == ''
+      end
+      super(buffername)
     end
 
     # Theme initialization is not part of the current Cocoa startup path yet.

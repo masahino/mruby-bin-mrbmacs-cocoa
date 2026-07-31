@@ -44,7 +44,8 @@ class CocoaViewForLayoutTest
   attr_accessor :notification_callback
   attr_accessor :current_pos
   attr_accessor :text
-  attr_reader :added_documents, :copied_ranges, :set_documents
+  attr_reader :added_documents, :autocomplete_lists, :copied_ranges
+  attr_reader :set_documents
   attr_reader :horizontal_scrollbar, :messages, :save_point
   attr_reader :vertical_scrollbar
 
@@ -335,6 +336,22 @@ assert('Mrbmacs::ApplicationCocoa opens a new file with shared find_file') do
   assert_equal 'New file', frame.last_message
 end
 
+assert('Mrbmacs::ApplicationCocoa switches safely with only one buffer') do
+  buffer = Mrbmacs::Buffer.new('*scratch*')
+  view = CocoaViewForLayoutTest.new
+  echo_win = CocoaViewForLayoutTest.new
+  frame = CocoaFrameForEchoInputTest.new(
+    Mrbmacs::TabCocoa.new(Mrbmacs::PaneCocoa.new(view, buffer)), echo_win
+  )
+  frame.input_events = [[:enter, '']]
+  app = Mrbmacs::ApplicationCocoa.new(frame, buffer)
+
+  assert_true app.key_press('C-x')
+  assert_true app.key_press('b')
+  assert_same buffer, app.current_buffer
+  assert_equal [buffer], app.buffer_list
+end
+
 
 assert('Mrbmacs::ApplicationCocoa handles a Scintilla key command') do
   buffer = Mrbmacs::Buffer.new('*scratch*')
@@ -563,6 +580,42 @@ assert('Mrbmacs::FrameCocoa completes echo input with Tab') do
   end
 
   assert_equal 'forward-char', result
+  assert_true view.messages.include?(:grab_focus)
+end
+
+assert('Mrbmacs::FrameCocoa selects a buffer through its echo area') do
+  view = CocoaViewForLayoutTest.new
+  echo_win = CocoaViewForLayoutTest.new
+  pane = Mrbmacs::PaneCocoa.new(view)
+  frame = CocoaFrameForEchoInputTest.new(
+    Mrbmacs::TabCocoa.new(pane), echo_win
+  )
+  frame.input_events = [[:enter, 'notes.rb']]
+
+  result = frame.select_buffer('*scratch*', ['*scratch*', 'notes.rb'])
+
+  assert_equal 'notes.rb', result
+  assert_true echo_win.messages.include?(
+    [:margin_text, 0, 'Switch to buffer: (default *scratch*) ']
+  )
+  assert_true view.messages.include?(:grab_focus)
+end
+
+assert('Mrbmacs::FrameCocoa completes buffer names by prefix') do
+  view = CocoaViewForLayoutTest.new
+  echo_win = CocoaViewForLayoutTest.new
+  pane = Mrbmacs::PaneCocoa.new(view)
+  frame = CocoaFrameForEchoInputTest.new(
+    Mrbmacs::TabCocoa.new(pane), echo_win
+  )
+  frame.input_events = [[:tab, 'no'], :enter, :enter]
+
+  result = frame.select_buffer(
+    '*scratch*', ['*scratch*', 'notes.rb', 'notice.txt']
+  )
+
+  assert_equal 'notes.rb', result
+  assert_equal [2, 'notes.rb notice.txt'], echo_win.autocomplete_lists.first
   assert_true view.messages.include?(:grab_focus)
 end
 
