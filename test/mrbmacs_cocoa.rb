@@ -73,7 +73,7 @@ class CocoaViewForLayoutTest
 
   def sci_set_docpointer(docpointer)
     @set_documents << docpointer
-    @docpointer = docpointer
+    @docpointer = docpointer.nil? ? @docpointer.to_i + 1 : docpointer
   end
 
   def send_message(message)
@@ -86,6 +86,30 @@ class CocoaViewForLayoutTest
 
   def sci_get_current_pos
     @current_pos
+  end
+
+  def sci_goto_pos(position)
+    @current_pos = position
+  end
+
+  def sci_pointy_from_position(_point, _position)
+    0
+  end
+
+  def sci_linescroll(columns, lines)
+    @messages << [:line_scroll, columns, lines]
+  end
+
+  def sci_text_height(_line)
+    16
+  end
+
+  def sci_lines_on_screen
+    20
+  end
+
+  def sci_set_lexer_language(language)
+    @messages << [:lexer, language]
   end
 
   def sci_set_anchor(position)
@@ -292,6 +316,23 @@ assert('Mrbmacs::ApplicationCocoa starts scratch as an empty saved document') do
   assert_equal '', view.text
   assert_true view.save_point
   assert_nil frame.last_message
+end
+
+assert('Mrbmacs::ApplicationCocoa opens a new file with shared find_file') do
+  filename = "#{ENV['TMPDIR'] || '/tmp'}/mrbmacs-cocoa-find-#{$$}.rb"
+  File.delete(filename) if File.exist?(filename)
+  buffer = Mrbmacs::Buffer.new('*scratch*')
+  view = CocoaViewForLayoutTest.new
+  pane = Mrbmacs::PaneCocoa.new(view, buffer)
+  frame = Mrbmacs::FrameCocoa.new(Mrbmacs::TabCocoa.new(pane))
+  app = Mrbmacs::ApplicationCocoa.new(frame, buffer)
+
+  app.find_file(filename)
+
+  assert_equal File.expand_path(filename), app.current_buffer.filename
+  assert_equal 2, app.buffer_list.length
+  assert_same app.current_buffer, pane.buffer
+  assert_equal 'New file', frame.last_message
 end
 
 
