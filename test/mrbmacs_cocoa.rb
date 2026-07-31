@@ -25,12 +25,28 @@ class CocoaFrameForExitTest < Mrbmacs::FrameCocoa
   end
 end
 
+
+class CocoaFrameForEchoInputTest < Mrbmacs::FrameCocoa
+  attr_accessor :input_events
+
+  def wait_echo_event
+    event = @input_events.shift
+    if event.is_a?(Array)
+      @echo_win.text = event[1]
+      event[0]
+    else
+      event
+    end
+  end
+end
+
 class CocoaViewForLayoutTest
   attr_accessor :notification_callback
   attr_accessor :current_pos
   attr_accessor :text
   attr_reader :added_documents, :copied_ranges, :set_documents
-  attr_reader :messages, :save_point
+  attr_reader :horizontal_scrollbar, :messages, :save_point
+  attr_reader :vertical_scrollbar
 
   def initialize(docpointer = 100)
     @docpointer = docpointer
@@ -39,6 +55,10 @@ class CocoaViewForLayoutTest
     @current_pos = 0
     @set_documents = []
     @messages = []
+    @horizontal_scrollbar = true
+    @vertical_scrollbar = true
+    @autocomplete_active = false
+    @autocomplete_lists = []
     @text = ''
     @save_point = false
   end
@@ -98,6 +118,74 @@ class CocoaViewForLayoutTest
 
   def sci_new_line
     @messages << :new_line
+  end
+
+  def sci_clear_all
+    @text = ''
+  end
+
+  def sci_add_text(_length, text)
+    @text += text
+  end
+
+  def sci_document_end
+    @messages << :document_end
+  end
+
+  def sci_set_hscrollbar(visible)
+    @horizontal_scrollbar = visible
+  end
+
+  def sci_set_vscrollbar(visible)
+    @vertical_scrollbar = visible
+  end
+
+  def sci_set_margin_typen(margin, type)
+    @messages << [:margin_type, margin, type]
+  end
+
+  def sci_text_width(_style, text)
+    text.bytesize
+  end
+
+  def sci_set_margin_widthn(margin, width)
+    @messages << [:margin_width, margin, width]
+  end
+
+  def sci_margin_set_text(line, text)
+    @messages << [:margin_text, line, text]
+  end
+
+  def sci_grab_focus
+    @messages << :grab_focus
+  end
+
+  def sci_autoc_active
+    @autocomplete_active
+  end
+
+  def sci_autoc_cancel
+    @autocomplete_active = false
+  end
+
+  def sci_autoc_complete
+    unless @autocomplete_lists.empty?
+      @text = @autocomplete_lists[-1][1].split.first
+    end
+    @autocomplete_active = false
+  end
+
+  def sci_autoc_get_separator
+    32
+  end
+
+  def sci_autoc_show(length, list)
+    @autocomplete_active = true
+    @autocomplete_lists << [length, list]
+  end
+
+  def sci_get_line(_line)
+    @text
   end
 
   def sci_get_length
@@ -371,6 +459,7 @@ assert('Cocoa layout starts with one frame, one tab, and one pane') do
   assert_same tab, frame.active_tab
   assert_same pane, frame.active_pane
   assert_same view, frame.view
+  assert_false view.horizontal_scrollbar
   assert_equal 1234, pane.native_handle
 end
 
@@ -384,6 +473,56 @@ assert('Cocoa layout exposes the shared frame and edit-window interface') do
   assert_same view, frame.view_win
   assert_same pane, frame.edit_win
   assert_equal [pane], frame.edit_win_list
+end
+
+assert('Mrbmacs::FrameCocoa displays messages in its shared echo area') do
+  view = CocoaViewForLayoutTest.new
+  echo_win = CocoaViewForLayoutTest.new
+  pane = Mrbmacs::PaneCocoa.new(view)
+  frame = Mrbmacs::FrameCocoa.new(Mrbmacs::TabCocoa.new(pane), echo_win)
+
+  frame.echo_puts('New file')
+
+  assert_same echo_win, frame.echo_win
+  assert_false echo_win.horizontal_scrollbar
+  assert_false echo_win.vertical_scrollbar
+  assert_equal 'New file', echo_win.text
+  assert_true echo_win.messages.include?(:document_end)
+  assert_equal 'New file', frame.last_message
+end
+
+assert('Mrbmacs::FrameCocoa reads input through its shared echo area') do
+  view = CocoaViewForLayoutTest.new
+  echo_win = CocoaViewForLayoutTest.new
+  pane = Mrbmacs::PaneCocoa.new(view)
+  frame = CocoaFrameForEchoInputTest.new(
+    Mrbmacs::TabCocoa.new(pane), echo_win
+  )
+  frame.input_events = [[:enter, '/tmp/test.rb']]
+
+  assert_equal '/tmp/test.rb', frame.echo_gets('Find file: ', '/tmp/')
+  assert_equal '', echo_win.text
+  assert_true echo_win.messages.include?([:margin_text, 0, 'Find file: '])
+  assert_true echo_win.messages.include?([:margin_text, 0, ''])
+  assert_true view.messages.include?(:grab_focus)
+end
+
+
+assert('Mrbmacs::FrameCocoa completes echo input with Tab') do
+  view = CocoaViewForLayoutTest.new
+  echo_win = CocoaViewForLayoutTest.new
+  pane = Mrbmacs::PaneCocoa.new(view)
+  frame = CocoaFrameForEchoInputTest.new(
+    Mrbmacs::TabCocoa.new(pane), echo_win
+  )
+  frame.input_events = [[:tab, 'for'], :enter, :enter]
+
+  result = frame.echo_gets('M-x ') do |input|
+    ['forward-char forward-line', input.length]
+  end
+
+  assert_equal 'forward-char', result
+  assert_true view.messages.include?(:grab_focus)
 end
 
 assert('Mrbmacs::TabCocoa is a layout and not a buffer') do
