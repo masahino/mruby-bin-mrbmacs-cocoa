@@ -62,6 +62,7 @@ class CocoaViewForLayoutTest
   attr_reader :set_documents
   attr_reader :horizontal_scrollbar, :messages, :save_point
   attr_reader :search_lengths, :selections
+  attr_reader :replacement_lengths, :undo_actions
   attr_reader :vertical_scrollbar
 
   def initialize(docpointer = 100)
@@ -78,11 +79,13 @@ class CocoaViewForLayoutTest
     @text = ''
     @save_point = false
     @search_lengths = []
+    @replacement_lengths = []
     @selection_start = 0
     @selection_end = 0
     @selections = []
     @target_start = 0
     @target_end = 0
+    @undo_actions = []
   end
 
   def sci_get_docpointer
@@ -183,6 +186,26 @@ class CocoaViewForLayoutTest
     @target_start = found
     @target_end = found + search_text.bytesize
     found
+  end
+
+  def sci_replace_target(length, replacement_text)
+    @replacement_lengths << length
+    prefix = @text[0...@target_start]
+    suffix = @text[@target_end..]
+    @text = prefix + replacement_text + suffix
+    @target_end = @target_start + replacement_text.bytesize
+    @selection_start = @target_start
+    @selection_end = @target_end
+    @current_pos = @target_end
+    replacement_text.bytesize
+  end
+
+  def sci_begin_undo_action
+    @undo_actions << :begin
+  end
+
+  def sci_end_undo_action
+    @undo_actions << :end
   end
 
   def sci_pointy_from_position(_point, _position)
@@ -540,6 +563,130 @@ assert('Mrbmacs::ApplicationCocoa uses byte length for search text') do
   echo_win.text = 'あ'
   app.echo_sci_notify('code' => Scintilla::SCN_MODIFIED)
   assert_equal 'あ'.bytesize, view.search_lengths.last
+end
+
+assert('Mrbmacs::ApplicationCocoa replaces all text from point') do
+  buffer = Mrbmacs::Buffer.new('*scratch*')
+  view = CocoaViewForLayoutTest.new
+  view.text = 'one two one'
+  echo_win = CocoaViewForLayoutTest.new
+  frame = Mrbmacs::FrameCocoa.new(
+    Mrbmacs::TabCocoa.new(Mrbmacs::PaneCocoa.new(view, buffer)), echo_win
+  )
+  app = Mrbmacs::ApplicationCocoa.new(frame, buffer)
+
+  app.start_replace(false, 'one', '1')
+
+  assert_equal '1 two 1', view.text
+  assert_equal [:begin, :end], view.undo_actions
+  assert_equal 'Replaced 2 occurrences', frame.last_message
+end
+
+assert('Mrbmacs::ApplicationCocoa starts query replace with M-%') do
+  buffer = Mrbmacs::Buffer.new('*scratch*')
+  view = CocoaViewForLayoutTest.new
+  view.text = 'one two one'
+  echo_win = CocoaViewForLayoutTest.new
+  frame = CocoaFrameForEchoInputTest.new(
+    Mrbmacs::TabCocoa.new(Mrbmacs::PaneCocoa.new(view, buffer)), echo_win
+  )
+  frame.input_events = [[:enter, 'one'], [:enter, '1']]
+  app = Mrbmacs::ApplicationCocoa.new(frame, buffer)
+
+  assert_true app.key_press('M-%')
+
+  assert_true app.query_replace_active?
+  assert_equal [0, 3], view.selections.last
+  assert_true app.echo_key_press('q')
+end
+
+assert('Mrbmacs::ApplicationCocoa skips and replaces query matches') do
+  buffer = Mrbmacs::Buffer.new('*scratch*')
+  view = CocoaViewForLayoutTest.new
+  view.text = 'one two one'
+  echo_win = CocoaViewForLayoutTest.new
+  frame = Mrbmacs::FrameCocoa.new(
+    Mrbmacs::TabCocoa.new(Mrbmacs::PaneCocoa.new(view, buffer)), echo_win
+  )
+  app = Mrbmacs::ApplicationCocoa.new(frame, buffer)
+
+  app.start_replace(true, 'one', '1')
+  assert_true app.query_replace_active?
+  assert_equal [0, 3], view.selections.last
+  assert_true app.echo_key_press('n')
+  assert_equal [8, 11], view.selections.last
+  assert_true app.echo_key_press('y')
+
+  assert_equal 'one two 1', view.text
+  assert_false app.query_replace_active?
+  assert_equal 'Replaced 1 occurrence', frame.last_message
+end
+
+assert('Mrbmacs::ApplicationCocoa replaces remaining query matches') do
+  buffer = Mrbmacs::Buffer.new('*scratch*')
+  view = CocoaViewForLayoutTest.new
+  view.text = 'one one one'
+  echo_win = CocoaViewForLayoutTest.new
+  frame = Mrbmacs::FrameCocoa.new(
+    Mrbmacs::TabCocoa.new(Mrbmacs::PaneCocoa.new(view, buffer)), echo_win
+  )
+  app = Mrbmacs::ApplicationCocoa.new(frame, buffer)
+
+  app.start_replace(true, 'one', '1')
+  assert_true app.echo_key_press('!')
+
+  assert_equal '1 1 1', view.text
+  assert_false app.query_replace_active?
+  assert_equal 'Replaced 3 occurrences', frame.last_message
+end
+
+assert('Mrbmacs::ApplicationCocoa cancels query replace') do
+  buffer = Mrbmacs::Buffer.new('*scratch*')
+  view = CocoaViewForLayoutTest.new
+  view.text = 'one two one'
+  echo_win = CocoaViewForLayoutTest.new
+  frame = Mrbmacs::FrameCocoa.new(
+    Mrbmacs::TabCocoa.new(Mrbmacs::PaneCocoa.new(view, buffer)), echo_win
+  )
+  app = Mrbmacs::ApplicationCocoa.new(frame, buffer)
+
+  app.start_replace(true, 'one', '1')
+  assert_true app.echo_key_press('C-g')
+
+  assert_equal 'one two one', view.text
+  assert_false app.query_replace_active?
+  assert_equal 'Quit', frame.last_message
+end
+
+assert('Mrbmacs::ApplicationCocoa rejects an empty replacement search') do
+  buffer = Mrbmacs::Buffer.new('*scratch*')
+  view = CocoaViewForLayoutTest.new
+  view.text = 'one'
+  echo_win = CocoaViewForLayoutTest.new
+  frame = Mrbmacs::FrameCocoa.new(
+    Mrbmacs::TabCocoa.new(Mrbmacs::PaneCocoa.new(view, buffer)), echo_win
+  )
+  app = Mrbmacs::ApplicationCocoa.new(frame, buffer)
+
+  app.start_replace(false, '', 'x')
+
+  assert_equal 'one', view.text
+  assert_equal 'Empty search string', frame.last_message
+end
+
+assert('Mrbmacs::ApplicationCocoa uses byte lengths for replacement') do
+  buffer = Mrbmacs::Buffer.new('*scratch*')
+  view = CocoaViewForLayoutTest.new
+  view.text = 'a'
+  echo_win = CocoaViewForLayoutTest.new
+  frame = Mrbmacs::FrameCocoa.new(
+    Mrbmacs::TabCocoa.new(Mrbmacs::PaneCocoa.new(view, buffer)), echo_win
+  )
+  app = Mrbmacs::ApplicationCocoa.new(frame, buffer)
+
+  app.start_replace(false, 'a', 'あ')
+
+  assert_equal 'あ'.bytesize, view.replacement_lengths.last
 end
 
 
