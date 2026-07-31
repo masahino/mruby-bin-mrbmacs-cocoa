@@ -22,10 +22,11 @@ The initial implementation:
 - provides an echo area with minibuffer input and completion;
 - executes commands by name with `M-x`;
 - switches buffers with `C-x b` and kills buffers with `C-x k`;
+- searches incrementally through the echo area with `C-s` and `C-r`;
 - displays the shared mrbmacs mode line in each Cocoa pane;
 - provides a standard application menu and Quit command.
 
-Search, replace, pane splitting, native tabs, and the remaining
+Replace, pane splitting, native tabs, and the remaining
 `mruby-mrbmacs-base` integration will be added incrementally.
 
 Tabs represent complete pane layouts rather than individual buffers. This

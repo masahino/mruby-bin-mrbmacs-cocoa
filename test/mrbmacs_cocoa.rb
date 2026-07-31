@@ -61,6 +61,7 @@ class CocoaViewForLayoutTest
   attr_reader :added_documents, :autocomplete_lists, :copied_ranges
   attr_reader :set_documents
   attr_reader :horizontal_scrollbar, :messages, :save_point
+  attr_reader :search_lengths, :selections
   attr_reader :vertical_scrollbar
 
   def initialize(docpointer = 100)
@@ -76,6 +77,12 @@ class CocoaViewForLayoutTest
     @autocomplete_lists = []
     @text = ''
     @save_point = false
+    @search_lengths = []
+    @selection_start = 0
+    @selection_end = 0
+    @selections = []
+    @target_start = 0
+    @target_end = 0
   end
 
   def sci_get_docpointer
@@ -125,6 +132,57 @@ class CocoaViewForLayoutTest
 
   def sci_goto_pos(position)
     @current_pos = position
+    @selection_start = position
+    @selection_end = position
+  end
+
+  def sci_get_selection_start
+    @selection_start
+  end
+
+  def sci_get_selection_end
+    @selection_end
+  end
+
+  def sci_set_sel(start_pos, end_pos)
+    @selection_start = start_pos
+    @selection_end = end_pos
+    @current_pos = end_pos
+    @selections << [start_pos, end_pos]
+  end
+
+  def sci_set_target_start(position)
+    @target_start = position
+  end
+
+  def sci_set_target_end(position)
+    @target_end = position
+  end
+
+  def sci_get_target_start
+    @target_start
+  end
+
+  def sci_get_target_end
+    @target_end
+  end
+
+  def sci_search_in_target(length, search_text)
+    @search_lengths << length
+    if @target_start <= @target_end
+      offset = @text[@target_start...@target_end].index(search_text)
+      return -1 if offset.nil?
+
+      found = @target_start + offset
+    else
+      offset = @text[@target_end...@target_start].rindex(search_text)
+      return -1 if offset.nil?
+
+      found = @target_end + offset
+    end
+    @target_start = found
+    @target_end = found + search_text.bytesize
+    found
   end
 
   def sci_pointy_from_position(_point, _position)
@@ -298,6 +356,24 @@ assert('Mrbmacs::ScintillaNotificationBridge ignores a missing $app') do
   end
 end
 
+assert('Mrbmacs::EchoNotificationBridge forwards echo notifications') do
+  previous_app = $app
+  receiver = Object.new
+  notification = { 'code' => Scintilla::SCN_MODIFIED }
+  receiver.define_singleton_method(:echo_sci_notify) do |event|
+    @notification = event
+  end
+  receiver.define_singleton_method(:notification) { @notification }
+
+  begin
+    $app = receiver
+    Mrbmacs::EchoNotificationBridge.new.call(notification)
+    assert_same notification, receiver.notification
+  ensure
+    $app = previous_app
+  end
+end
+
 assert('Mrbmacs::ApplicationCocoa dispatches Scintilla notifications') do
   app = CocoaApplicationForTest.new
   notification = { 'code' => Scintilla::SCN_MODIFIED }
@@ -402,6 +478,68 @@ assert('Mrbmacs::ApplicationCocoa kills a buffer through shared command') do
   assert_true app.key_press('k')
   assert_equal ['*scratch*'], app.buffer_list.map(&:name)
   assert_equal '*scratch*', app.current_buffer.name
+end
+
+assert('Mrbmacs::ApplicationCocoa searches incrementally forward') do
+  buffer = Mrbmacs::Buffer.new('*scratch*')
+  view = CocoaViewForLayoutTest.new
+  view.text = 'alpha beta alpha'
+  echo_win = CocoaViewForLayoutTest.new
+  frame = Mrbmacs::FrameCocoa.new(
+    Mrbmacs::TabCocoa.new(Mrbmacs::PaneCocoa.new(view, buffer)), echo_win
+  )
+  app = Mrbmacs::ApplicationCocoa.new(frame, buffer)
+
+  assert_true app.key_press('C-s')
+  assert_true app.isearch_active?
+  echo_win.text = 'alpha'
+  app.echo_sci_notify('code' => Scintilla::SCN_MODIFIED)
+  assert_equal [0, 5], view.selections.last
+  assert_true app.echo_key_press('C-s')
+  assert_equal [11, 16], view.selections.last
+  echo_win.text = ''
+  app.echo_sci_notify('code' => Scintilla::SCN_MODIFIED)
+  assert_equal 0, view.current_pos
+  assert_true app.echo_key_press('Enter')
+  assert_false app.isearch_active?
+  assert_equal '', echo_win.text
+end
+
+assert('Mrbmacs::ApplicationCocoa searches backward and cancels') do
+  buffer = Mrbmacs::Buffer.new('*scratch*')
+  view = CocoaViewForLayoutTest.new
+  view.text = 'alpha beta alpha'
+  view.current_pos = view.text.bytesize
+  view.sci_goto_pos(view.current_pos)
+  echo_win = CocoaViewForLayoutTest.new
+  frame = Mrbmacs::FrameCocoa.new(
+    Mrbmacs::TabCocoa.new(Mrbmacs::PaneCocoa.new(view, buffer)), echo_win
+  )
+  app = Mrbmacs::ApplicationCocoa.new(frame, buffer)
+
+  assert_true app.key_press('C-r')
+  echo_win.text = 'alpha'
+  app.echo_sci_notify('code' => Scintilla::SCN_MODIFIED)
+  assert_equal [11, 16], view.selections.last
+  assert_true app.echo_key_press('C-g')
+  assert_equal view.text.bytesize, view.current_pos
+  assert_false app.isearch_active?
+end
+
+assert('Mrbmacs::ApplicationCocoa uses byte length for search text') do
+  buffer = Mrbmacs::Buffer.new('*scratch*')
+  view = CocoaViewForLayoutTest.new
+  view.text = 'aあb'
+  echo_win = CocoaViewForLayoutTest.new
+  frame = Mrbmacs::FrameCocoa.new(
+    Mrbmacs::TabCocoa.new(Mrbmacs::PaneCocoa.new(view, buffer)), echo_win
+  )
+  app = Mrbmacs::ApplicationCocoa.new(frame, buffer)
+
+  app.isearch_forward
+  echo_win.text = 'あ'
+  app.echo_sci_notify('code' => Scintilla::SCN_MODIFIED)
+  assert_equal 'あ'.bytesize, view.search_lengths.last
 end
 
 
@@ -609,6 +747,16 @@ assert('Mrbmacs::FrameCocoa displays messages in its shared echo area') do
   assert_equal 'New file', echo_win.text
   assert_true echo_win.messages.include?(:document_end)
   assert_equal 'New file', frame.last_message
+end
+
+assert('Mrbmacs::FrameCocoa configures a separate echo notification bridge') do
+  view = CocoaViewForLayoutTest.new
+  echo_win = CocoaViewForLayoutTest.new
+  pane = Mrbmacs::PaneCocoa.new(view)
+  Mrbmacs::FrameCocoa.new(Mrbmacs::TabCocoa.new(pane), echo_win)
+
+  assert_kind_of Mrbmacs::EchoNotificationBridge,
+                 echo_win.notification_callback
 end
 
 assert('Mrbmacs::FrameCocoa reads input through its shared echo area') do
