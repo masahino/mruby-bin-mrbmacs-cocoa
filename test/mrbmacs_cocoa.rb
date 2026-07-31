@@ -17,6 +17,12 @@ class CocoaApplicationForTest < Mrbmacs::ApplicationCocoa
   end
 end
 
+class CocoaModelineApplicationForTest
+  def modeline_str
+    '(utf-8-LF):-- *scratch* (1,1)    ()    [Fundamental]    []'
+  end
+end
+
 class CocoaFrameForExitTest < Mrbmacs::FrameCocoa
   attr_reader :exited
 
@@ -87,6 +93,26 @@ class CocoaViewForLayoutTest
 
   def sci_get_current_pos
     @current_pos
+  end
+
+  def sci_get_column(_position)
+    0
+  end
+
+  def sci_line_from_position(_position)
+    0
+  end
+
+  def sci_get_eol_mode
+    Scintilla::SC_EOL_LF
+  end
+
+  def sci_get_modify
+    0
+  end
+
+  def sci_get_readonly
+    false
   end
 
   def sci_goto_pos(position)
@@ -531,6 +557,16 @@ assert('Cocoa layout exposes the shared frame and edit-window interface') do
   assert_same view, frame.view_win
   assert_same pane, frame.edit_win
   assert_equal [pane], frame.edit_win_list
+end
+
+assert('Mrbmacs::FrameCocoa updates the active pane mode line') do
+  pane = Mrbmacs::PaneCocoa.new(CocoaViewForLayoutTest.new)
+  frame = Mrbmacs::FrameCocoa.new(Mrbmacs::TabCocoa.new(pane))
+  app = CocoaModelineApplicationForTest.new
+
+  frame.modeline(app)
+
+  assert_equal app.modeline_str, pane.modeline_text
 end
 
 assert('Mrbmacs::FrameCocoa displays messages in its shared echo area') do

@@ -13,10 +13,14 @@ module Mrbmacs
   class PaneCocoa
     attr_reader :view
     attr_reader :buffer
+    attr_reader :modeline_text
+    attr_accessor :modeline_native_handle
 
     def initialize(view, buffer = nil)
       @view = view
       @buffer = nil
+      @modeline_native_handle = nil
+      @modeline_text = ''
       @view.notification_callback = ScintillaNotificationBridge.new
       self.buffer = buffer unless buffer.nil?
     end
@@ -43,6 +47,20 @@ module Mrbmacs
     # EditWindow-compatible access used by shared editor commands.
     def sci
       @view
+    end
+
+    def newline
+      case @view.sci_get_eol_mode
+      when Scintilla::SC_EOL_CRLF then 'CRLF'
+      when Scintilla::SC_EOL_CR then 'CR'
+      when Scintilla::SC_EOL_LF then 'LF'
+      else ''
+      end
+    end
+
+    def modeline_text=(text)
+      @modeline_text = text.to_s
+      update_native_modeline(@modeline_text) unless @modeline_native_handle.nil?
     end
   end
 
@@ -101,9 +119,12 @@ module Mrbmacs
       @active_tab.panes
     end
 
-    # The Cocoa mode line will be introduced as a separate view. Keep the
-    # shared command path usable until then, as FrameBase does for buffer names.
-    def modeline(_app)
+    def modeline(app, pane = active_pane)
+      pane.modeline_text = get_mode_str(app)
+    end
+
+    def modeline_refresh(app)
+      modeline(app)
     end
 
     def echo_puts(text)
@@ -206,6 +227,7 @@ module Mrbmacs
     def sci_notify(notification)
       $stderr.puts notification['code'] if $DEBUG
       call_sci_event(notification)
+      @frame.modeline(self) unless @frame.nil?
     end
 
     # Like the terminal frontends, Cocoa currently switches documents in the
@@ -242,6 +264,7 @@ module Mrbmacs
     def load_initial_file(filename = nil)
       open_file(filename) unless filename.nil?
       @frame.view.sci_set_save_point
+      @frame.modeline(self)
     end
 
     # Cocoa terminates its native event loop through FrameCocoa#exit. Avoid
