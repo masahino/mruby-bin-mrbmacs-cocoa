@@ -94,6 +94,27 @@ module Mrbmacs
       @modeline_text = text.to_s
       update_native_modeline(@modeline_text) unless @modeline_native_handle.nil?
     end
+
+    def apply_theme(theme)
+      @theme = theme
+      apply_theme_base(theme)
+      @view.sci_set_fold_margin_colour(true, theme.background_color)
+      @view.sci_set_fold_margin_hicolour(true, theme.foreground_color)
+      (25..31).each do |marker|
+        @view.sci_marker_set_fore(marker, theme.foreground_color)
+        @view.sci_marker_set_back(marker, theme.background_color)
+      end
+    end
+
+    def apply_modeline_theme(active)
+      return if @theme.nil? || @modeline_native_handle.nil?
+
+      color_name = active ? :color_mode_line : :color_mode_line_inactive
+      colors = @theme.font_color[color_name]
+      return if colors.nil?
+
+      update_native_modeline_theme(colors[0], colors[1])
+    end
   end
 
   # A branch in a tab's pane layout tree.
@@ -237,8 +258,20 @@ module Mrbmacs
     end
 
     def switch_window(new_pane)
+      old_pane = active_pane
       @active_tab.active_pane = new_pane
+      old_pane.apply_modeline_theme(false) unless old_pane.equal?(new_pane)
+      new_pane.apply_modeline_theme(true)
       new_pane.view.sci_grab_focus
+    end
+
+    def apply_theme(theme)
+      @tabs.each do |tab|
+        tab.panes.each do |pane|
+          pane.apply_theme(theme)
+          pane.apply_modeline_theme(pane.equal?(active_pane))
+        end
+      end
     end
 
     def delete_window(target_pane)
@@ -266,6 +299,7 @@ module Mrbmacs
 
     def modeline(app, pane = active_pane)
       pane.modeline_text = get_mode_str(app)
+      pane.apply_modeline_theme(pane.equal?(active_pane))
     end
 
     def modeline_refresh(app)
@@ -425,6 +459,7 @@ module Mrbmacs
       @replace_search_text = nil
       @replacement_text = nil
       @replace_next_pos = nil
+      init_theme
       @command_list = Mrbmacs::Command.instance_methods.map(&:to_s).sort
     end
 
@@ -761,7 +796,6 @@ module Mrbmacs
       super(buffername)
     end
 
-    # Theme initialization is not part of the current Cocoa startup path yet.
     def apply_theme_to_mode(mode, edit_win, theme)
       return if theme.nil?
 
