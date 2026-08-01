@@ -419,6 +419,39 @@ assert('Mrbmacs::ApplicationCocoa owns its Cocoa frame and initial buffer') do
   assert_kind_of Mrbmacs::Config, app.config
 end
 
+assert('Mrbmacs::ApplicationCocoa follows native pane focus') do
+  first_buffer = Mrbmacs::Buffer.new('first')
+  second_buffer = Mrbmacs::Buffer.new('second')
+  first = Mrbmacs::PaneCocoa.new(
+    CocoaViewForLayoutTest.new(101), first_buffer
+  )
+  second = Mrbmacs::PaneCocoa.new(
+    CocoaViewForLayoutTest.new(102), second_buffer
+  )
+  tab = Mrbmacs::TabCocoa.new(first)
+  tab.split(first, second, :vertical)
+  frame = Mrbmacs::FrameCocoa.new(tab)
+  app = Mrbmacs::ApplicationCocoa.new(frame, first_buffer)
+  previous_app = $app
+
+  begin
+    $app = app
+    second.view.notification_callback.call(
+      'code' => Scintilla::SCN_MODIFIED
+    )
+    assert_same first, frame.active_pane
+    assert_same first_buffer, app.current_buffer
+
+    second.view.notification_callback.call(
+      'code' => Scintilla::SCN_FOCUSIN
+    )
+    assert_same second, frame.active_pane
+    assert_same second_buffer, app.current_buffer
+  ensure
+    $app = previous_app
+  end
+end
+
 assert('Mrbmacs::ApplicationCocoa starts a missing path as a new file') do
   filename = "#{ENV['TMPDIR'] || '/tmp'}/mrbmacs-cocoa-new-#{$$}.txt"
   File.delete(filename) if File.exist?(filename)

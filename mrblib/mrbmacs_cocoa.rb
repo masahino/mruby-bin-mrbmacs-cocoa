@@ -1,10 +1,18 @@
 module Mrbmacs
   # Forwards Scintilla notifications to the active mrbmacs application.
   class ScintillaNotificationBridge
+    def initialize(pane = nil)
+      @pane = pane
+    end
+
     def call(notification)
       return if $app.nil?
 
-      $app.sci_notify(notification)
+      if @pane.nil?
+        $app.sci_notify(notification)
+      else
+        $app.sci_notify_from_pane(@pane, notification)
+      end
     end
   end
 
@@ -45,7 +53,7 @@ module Mrbmacs
       @layout_native_handle = nil
       @parent = nil
       @modeline_text = ''
-      @view.notification_callback = ScintillaNotificationBridge.new
+      @view.notification_callback = ScintillaNotificationBridge.new(self)
       self.buffer = buffer unless buffer.nil?
     end
 
@@ -424,6 +432,14 @@ module Mrbmacs
       $stderr.puts notification['code'] if $DEBUG
       call_sci_event(notification)
       @frame.modeline(self) unless @frame.nil?
+    end
+
+    def sci_notify_from_pane(pane, notification)
+      if notification['code'] == Scintilla::SCN_FOCUSIN
+        @frame.active_tab.active_pane = pane
+        @current_buffer = pane.buffer
+      end
+      sci_notify(notification)
     end
 
     def echo_sci_notify(_notification)
