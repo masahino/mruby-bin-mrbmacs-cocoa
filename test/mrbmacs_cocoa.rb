@@ -419,6 +419,39 @@ assert('Mrbmacs::ApplicationCocoa owns its Cocoa frame and initial buffer') do
   assert_kind_of Mrbmacs::Config, app.config
 end
 
+assert('Mrbmacs::ApplicationCocoa follows native pane focus') do
+  first_buffer = Mrbmacs::Buffer.new('first')
+  second_buffer = Mrbmacs::Buffer.new('second')
+  first = Mrbmacs::PaneCocoa.new(
+    CocoaViewForLayoutTest.new(101), first_buffer
+  )
+  second = Mrbmacs::PaneCocoa.new(
+    CocoaViewForLayoutTest.new(102), second_buffer
+  )
+  tab = Mrbmacs::TabCocoa.new(first)
+  tab.split(first, second, :vertical)
+  frame = Mrbmacs::FrameCocoa.new(tab)
+  app = Mrbmacs::ApplicationCocoa.new(frame, first_buffer)
+  previous_app = $app
+
+  begin
+    $app = app
+    second.view.notification_callback.call(
+      'code' => Scintilla::SCN_MODIFIED
+    )
+    assert_same first, frame.active_pane
+    assert_same first_buffer, app.current_buffer
+
+    second.view.notification_callback.call(
+      'code' => Scintilla::SCN_FOCUSIN
+    )
+    assert_same second, frame.active_pane
+    assert_same second_buffer, app.current_buffer
+  ensure
+    $app = previous_app
+  end
+end
+
 assert('Mrbmacs::ApplicationCocoa starts a missing path as a new file') do
   filename = "#{ENV['TMPDIR'] || '/tmp'}/mrbmacs-cocoa-new-#{$$}.txt"
   File.delete(filename) if File.exist?(filename)
@@ -868,6 +901,91 @@ assert('Cocoa layout exposes the shared frame and edit-window interface') do
   assert_same view, frame.view_win
   assert_same pane, frame.edit_win
   assert_equal [pane], frame.edit_win_list
+end
+
+assert('Cocoa tab maintains a nested pane layout tree') do
+  first = Mrbmacs::PaneCocoa.new(CocoaViewForLayoutTest.new(101))
+  second = Mrbmacs::PaneCocoa.new(CocoaViewForLayoutTest.new(102))
+  third = Mrbmacs::PaneCocoa.new(CocoaViewForLayoutTest.new(103))
+  tab = Mrbmacs::TabCocoa.new(first)
+
+  vertical = tab.split(first, second, :vertical)
+  horizontal = tab.split(second, third, :horizontal)
+
+  assert_same vertical, tab.layout_root
+  assert_same horizontal, vertical.second
+  assert_equal [first, second, third], tab.panes
+  assert_equal :vertical, vertical.orientation
+  assert_equal :horizontal, horizontal.orientation
+end
+
+assert('Cocoa frame cycles and deletes panes through the layout tree') do
+  buffer = Mrbmacs::Buffer.new('*scratch*')
+  first = Mrbmacs::PaneCocoa.new(CocoaViewForLayoutTest.new(101), buffer)
+  second = Mrbmacs::PaneCocoa.new(CocoaViewForLayoutTest.new(102), buffer)
+  third = Mrbmacs::PaneCocoa.new(CocoaViewForLayoutTest.new(103), buffer)
+  tab = Mrbmacs::TabCocoa.new(first)
+  tab.split(first, second, :vertical)
+  tab.split(second, third, :horizontal)
+  frame = Mrbmacs::FrameCocoa.new(tab)
+
+  frame.switch_window(second)
+  assert_same second, frame.active_pane
+  assert_true second.view.messages.include?(:grab_focus)
+  frame.delete_window(second)
+
+  assert_equal [first, third], tab.panes
+  assert_same third, frame.active_pane
+  assert_equal 2, second.view.added_documents.size
+  assert_equal second.buffer.docpointer, second.view.added_documents.last
+  frame.delete_other_window
+  assert_equal [third], tab.panes
+  assert_same third, tab.layout_root
+  assert_equal [first.buffer.docpointer], first.view.added_documents
+end
+
+assert('Cocoa application splits the active pane with the same buffer') do
+  buffer = Mrbmacs::Buffer.new('*scratch*')
+  pane = Mrbmacs::PaneCocoa.new(Scintilla::ScintillaCocoa.new, buffer)
+  tab = Mrbmacs::TabCocoa.new(pane)
+  frame = Mrbmacs::FrameCocoa.new(tab)
+  app = Mrbmacs::ApplicationCocoa.new(frame, buffer)
+
+  assert_true app.key_press('C-x')
+  assert_true app.key_press('2')
+
+  assert_equal 2, tab.panes.size
+  assert_same pane, tab.active_pane
+  assert_same buffer, tab.panes[1].buffer
+  pane.view.sci_set_text('shared')
+  assert_equal 'shared', tab.panes[1].view.sci_get_text(7)
+end
+
+assert('Cocoa application rejects a pane that is too small to split') do
+  buffer = Mrbmacs::Buffer.new('*scratch*')
+  pane = Mrbmacs::PaneCocoa.new(CocoaViewForLayoutTest.new, buffer)
+  tab = Mrbmacs::TabCocoa.new(pane)
+  frame = Mrbmacs::FrameCocoa.new(tab)
+  frame.native_handle = 1
+  frame.define_singleton_method(:pane_can_split?) do |_pane, _direction, _size|
+    false
+  end
+  app = Mrbmacs::ApplicationCocoa.new(frame, buffer)
+
+  app.split_window(false)
+
+  assert_equal [pane], tab.panes
+  assert_equal 'too small for splitting', frame.last_message
+end
+
+assert('Cocoa frame refuses to delete its sole pane') do
+  pane = Mrbmacs::PaneCocoa.new(CocoaViewForLayoutTest.new)
+  frame = Mrbmacs::FrameCocoa.new(Mrbmacs::TabCocoa.new(pane))
+
+  frame.delete_window(pane)
+
+  assert_equal [pane], frame.edit_win_list
+  assert_equal 'Atempt to delete sole ordinary window', frame.last_message
 end
 
 assert('Mrbmacs::FrameCocoa updates the active pane mode line') do

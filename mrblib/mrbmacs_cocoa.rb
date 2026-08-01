@@ -1,10 +1,18 @@
 module Mrbmacs
   # Forwards Scintilla notifications to the active mrbmacs application.
   class ScintillaNotificationBridge
+    def initialize(pane = nil)
+      @pane = pane
+    end
+
     def call(notification)
       return if $app.nil?
 
-      $app.sci_notify(notification)
+      if @pane.nil?
+        $app.sci_notify(notification)
+      else
+        $app.sci_notify_from_pane(@pane, notification)
+      end
     end
   end
 
@@ -30,18 +38,22 @@ module Mrbmacs
 
   # A single editor area. A pane owns its Scintilla view and displays one
   # buffer.
-  class PaneCocoa
+  class PaneCocoa < EditWindow
     attr_reader :view
     attr_reader :buffer
     attr_reader :modeline_text
     attr_accessor :modeline_native_handle
+    attr_accessor :layout_native_handle, :parent
 
     def initialize(view, buffer = nil)
       @view = view
+      @sci = view
       @buffer = nil
       @modeline_native_handle = nil
+      @layout_native_handle = nil
+      @parent = nil
       @modeline_text = ''
-      @view.notification_callback = ScintillaNotificationBridge.new
+      @view.notification_callback = ScintillaNotificationBridge.new(self)
       self.buffer = buffer unless buffer.nil?
     end
 
@@ -84,14 +96,97 @@ module Mrbmacs
     end
   end
 
+  # A branch in a tab's pane layout tree.
+  class SplitCocoa
+    attr_reader :orientation
+    attr_accessor :first, :second, :parent
+
+    def initialize(orientation, first, second)
+      @orientation = orientation
+      @parent = nil
+      self.first = first
+      self.second = second
+    end
+
+    def first=(node)
+      @first = node
+      node.parent = self
+    end
+
+    def second=(node)
+      @second = node
+      node.parent = self
+    end
+
+    def panes
+      first_panes = @first.is_a?(PaneCocoa) ? [@first] : @first.panes
+      second_panes = @second.is_a?(PaneCocoa) ? [@second] : @second.panes
+      first_panes + second_panes
+    end
+  end
+
   # One tab represents a complete editor layout, not a buffer.
   class TabCocoa
-    attr_reader :panes
+    attr_reader :layout_root
     attr_accessor :active_pane
 
     def initialize(pane)
-      @panes = [pane]
+      @layout_root = pane
       @active_pane = pane
+    end
+
+    def panes
+      collect_panes(@layout_root)
+    end
+
+    def split(pane, new_pane, orientation)
+      parent = pane.parent
+      split = SplitCocoa.new(orientation, pane, new_pane)
+      if parent.nil?
+        @layout_root = split
+        split.parent = nil
+      elsif parent.first.equal?(pane)
+        parent.first = split
+      else
+        parent.second = split
+      end
+      split
+    end
+
+    def delete(pane)
+      return nil if pane.equal?(@layout_root)
+
+      parent = pane.parent
+      sibling = parent.first.equal?(pane) ? parent.second : parent.first
+      replace_node(parent, sibling)
+      pane.parent = nil
+      sibling.is_a?(PaneCocoa) ? sibling : sibling.panes.first
+    end
+
+    def keep_only(pane)
+      @layout_root = pane
+      pane.parent = nil
+      @active_pane = pane
+    end
+
+    private
+
+    def collect_panes(node)
+      return [node] if node.is_a?(PaneCocoa)
+
+      collect_panes(node.first) + collect_panes(node.second)
+    end
+
+    def replace_node(old_node, new_node)
+      parent = old_node.parent
+      if parent.nil?
+        @layout_root = new_node
+        new_node.parent = nil
+      elsif parent.first.equal?(old_node)
+        parent.first = new_node
+      else
+        parent.second = new_node
+      end
     end
   end
 
@@ -100,13 +195,14 @@ module Mrbmacs
     attr_reader :echo_win
     attr_reader :tabs
     attr_reader :last_message
-    attr_accessor :active_tab, :native_handle
+    attr_accessor :active_tab, :native_handle, :layout_native_handle
 
     def initialize(tab, echo_win = nil)
       @tabs = [tab]
       @active_tab = tab
       @echo_win = echo_win
       @native_handle = nil
+      @layout_native_handle = nil
       @last_message = nil
       view.sci_set_hscrollbar(false)
       unless @echo_win.nil?
@@ -138,6 +234,34 @@ module Mrbmacs
 
     def edit_win_list
       @active_tab.panes
+    end
+
+    def switch_window(new_pane)
+      @active_tab.active_pane = new_pane
+      new_pane.view.sci_grab_focus
+    end
+
+    def delete_window(target_pane)
+      if edit_win_list.size == 1
+        echo_puts('Atempt to delete sole ordinary window')
+        return
+      end
+
+      target_pane.view.sci_add_refdocument(target_pane.buffer.docpointer)
+      survivor = @active_tab.delete(target_pane)
+      remove_native_pane(target_pane) unless @native_handle.nil?
+      switch_window(survivor)
+    end
+
+    def delete_other_window
+      removed = edit_win_list.reject { |pane| pane.equal?(active_pane) }
+      removed.each do |pane|
+        pane.view.sci_add_refdocument(pane.buffer.docpointer)
+      end
+      @active_tab.keep_only(active_pane)
+      keep_only_native_pane(active_pane) unless @native_handle.nil?
+      removed.each { |pane| pane.parent = nil }
+      switch_window(active_pane)
     end
 
     def modeline(app, pane = active_pane)
@@ -308,6 +432,14 @@ module Mrbmacs
       $stderr.puts notification['code'] if $DEBUG
       call_sci_event(notification)
       @frame.modeline(self) unless @frame.nil?
+    end
+
+    def sci_notify_from_pane(pane, notification)
+      if notification['code'] == Scintilla::SCN_FOCUSIN
+        @frame.active_tab.active_pane = pane
+        @current_buffer = pane.buffer
+      end
+      sci_notify(notification)
     end
 
     def echo_sci_notify(_notification)
@@ -564,6 +696,44 @@ module Mrbmacs
       @isearch_active = false
       @frame.finish_isearch
       @frame.modeline(self)
+    end
+
+    # Cocoa uses a layout tree and NSSplitView instead of terminal coordinates.
+    def split_window(horizontal)
+      active_pane = @frame.active_pane
+      orientation = horizontal ? :horizontal : :vertical
+      unless @frame.native_handle.nil?
+        minimum_extent = if horizontal
+                           active_pane.view.sci_text_width(
+                             Scintilla::STYLE_DEFAULT, '0' * 10
+                           )
+                         else
+                           active_pane.view.sci_text_height(0) * 3 + 22
+                         end
+        unless @frame.pane_can_split?(
+          active_pane, orientation, minimum_extent
+        )
+          @frame.echo_puts('too small for splitting')
+          return
+        end
+      end
+
+      new_view = Scintilla::ScintillaCocoa.new
+      new_pane = PaneCocoa.new(new_view, active_pane.buffer)
+      new_view.sci_set_hscrollbar(false)
+      apply_keymap(new_view, @keymap)
+      unless @theme.nil?
+        new_pane.apply_theme(@theme)
+        apply_theme_to_mode(active_pane.buffer.mode, new_pane, @theme)
+      end
+
+      @frame.active_tab.split(active_pane, new_pane, orientation)
+      unless @frame.native_handle.nil?
+        @frame.split_native_pane(active_pane, new_pane, orientation)
+      end
+      @frame.modeline(self, active_pane)
+      @frame.modeline(self, new_pane)
+      @frame.switch_window(active_pane)
     end
 
     def isearch_prompt
