@@ -83,6 +83,174 @@ mrbmacs_pane_update_native_modeline(mrb_state *mrb, mrb_value self)
   return mrb_nil_value();
 }
 
+static NSView *
+mrbmacs_create_pane_native_view(mrb_state *mrb, mrb_value pane)
+{
+  const CGFloat modeline_height = 22.0;
+  mrb_value view_value;
+  mrb_value native_handle;
+  NSView *view;
+  NSView *container;
+  NSTextField *modeline;
+
+  view_value = mrb_funcall(mrb, pane, "view", 0);
+  native_handle = mrb_funcall(mrb, view_value, "native_handle", 0);
+  view = (NSView *)(intptr_t)mrb_integer(native_handle);
+  container = [[[NSView alloc]
+    initWithFrame:NSMakeRect(0, 0, 100, 100)] autorelease];
+  modeline = [[[NSTextField alloc] initWithFrame:NSZeroRect] autorelease];
+  [modeline setEditable:NO];
+  [modeline setSelectable:NO];
+  [modeline setBezeled:NO];
+  [modeline setDrawsBackground:YES];
+  [modeline setFont:[NSFont
+    monospacedSystemFontOfSize:12.0
+    weight:NSFontWeightRegular]];
+  [modeline setLineBreakMode:NSLineBreakByTruncatingTail];
+  [view setFrame:NSMakeRect(
+    0, modeline_height, container.bounds.size.width,
+    container.bounds.size.height - modeline_height
+  )];
+  [view setAutoresizingMask:NSViewWidthSizable | NSViewHeightSizable];
+  [modeline setFrame:NSMakeRect(
+    0, 0, container.bounds.size.width, modeline_height
+  )];
+  [modeline setAutoresizingMask:NSViewWidthSizable | NSViewMaxYMargin];
+  [container addSubview:view];
+  [container addSubview:modeline];
+  mrb_funcall(
+    mrb, pane, "modeline_native_handle=", 1,
+    mrb_int_value(mrb, (mrb_int)(intptr_t)modeline)
+  );
+  mrb_funcall(
+    mrb, pane, "layout_native_handle=", 1,
+    mrb_int_value(mrb, (mrb_int)(intptr_t)container)
+  );
+  return container;
+}
+
+static NSView *
+mrbmacs_pane_native_view(mrb_state *mrb, mrb_value pane)
+{
+  mrb_value native_handle = mrb_iv_get(
+    mrb, pane, mrb_intern_lit(mrb, "@layout_native_handle")
+  );
+  return (NSView *)(intptr_t)mrb_integer(native_handle);
+}
+
+static mrb_value
+mrbmacs_frame_split_native_pane(mrb_state *mrb, mrb_value self)
+{
+  mrb_value target_pane;
+  mrb_value new_pane;
+  mrb_sym orientation;
+  NSView *target;
+  NSView *new_view;
+  NSView *parent;
+  NSSplitView *split;
+  NSRect frame;
+  BOOL side_by_side;
+
+  (void)self;
+  mrb_get_args(mrb, "oon", &target_pane, &new_pane, &orientation);
+  target = mrbmacs_pane_native_view(mrb, target_pane);
+  new_view = mrbmacs_create_pane_native_view(mrb, new_pane);
+  parent = target.superview;
+  frame = target.frame;
+  side_by_side = orientation == mrb_intern_lit(mrb, "horizontal");
+  split = [[[NSSplitView alloc] initWithFrame:frame] autorelease];
+  [split setVertical:side_by_side];
+  [split setDividerStyle:NSSplitViewDividerStyleThin];
+  [split setAutoresizingMask:NSViewWidthSizable | NSViewHeightSizable];
+  [parent replaceSubview:target with:split];
+  [target setFrame:split.bounds];
+  [new_view setFrame:split.bounds];
+  [split addSubview:target];
+  [split addSubview:new_view];
+  [split adjustSubviews];
+  [split setPosition:(side_by_side ? NSWidth(split.bounds) : NSHeight(split.bounds)) / 2.0
+      ofDividerAtIndex:0];
+  return mrb_nil_value();
+}
+
+static mrb_value
+mrbmacs_frame_pane_can_split(mrb_state *mrb, mrb_value self)
+{
+  mrb_value pane;
+  mrb_sym orientation;
+  mrb_int minimum_extent;
+  NSView *pane_view;
+  CGFloat available_extent;
+  CGFloat divider_width;
+  BOOL side_by_side;
+
+  (void)self;
+  mrb_get_args(mrb, "oni", &pane, &orientation, &minimum_extent);
+  pane_view = mrbmacs_pane_native_view(mrb, pane);
+  side_by_side = orientation == mrb_intern_lit(mrb, "horizontal");
+  divider_width = 1.0;
+  available_extent = side_by_side ? NSWidth(pane_view.bounds)
+                                  : NSHeight(pane_view.bounds);
+  return mrb_bool_value(
+    available_extent >= (CGFloat)(minimum_extent * 2) + divider_width
+  );
+}
+
+static mrb_value
+mrbmacs_frame_remove_native_pane(mrb_state *mrb, mrb_value self)
+{
+  mrb_value target_pane;
+  NSView *target;
+  NSView *survivor;
+  NSSplitView *split;
+  NSView *parent;
+  NSRect frame;
+
+  (void)self;
+  mrb_get_args(mrb, "o", &target_pane);
+  target = mrbmacs_pane_native_view(mrb, target_pane);
+  split = (NSSplitView *)target.superview;
+  survivor = split.subviews[0] == target ? split.subviews[1] : split.subviews[0];
+  parent = split.superview;
+  frame = split.frame;
+  [survivor retain];
+  [survivor removeFromSuperview];
+  [parent replaceSubview:split with:survivor];
+  [survivor setFrame:frame];
+  [survivor setAutoresizingMask:NSViewWidthSizable | NSViewHeightSizable];
+  [survivor release];
+  return mrb_nil_value();
+}
+
+static mrb_value
+mrbmacs_frame_keep_only_native_pane(mrb_state *mrb, mrb_value self)
+{
+  mrb_value pane;
+  mrb_value native_handle;
+  NSView *pane_view;
+  NSView *layout_view;
+  NSArray *subviews;
+
+  mrb_get_args(mrb, "o", &pane);
+  pane_view = mrbmacs_pane_native_view(mrb, pane);
+  native_handle = mrb_iv_get(
+    mrb, self, mrb_intern_lit(mrb, "@layout_native_handle")
+  );
+  layout_view = (NSView *)(intptr_t)mrb_integer(native_handle);
+  [pane_view retain];
+  [pane_view removeFromSuperview];
+  subviews = [layout_view.subviews copy];
+  for (NSView *view in subviews) {
+    [view removeFromSuperview];
+  }
+  [subviews release];
+  [pane_view setFrame:layout_view.bounds];
+  [pane_view setAutoresizingMask:NSViewWidthSizable | NSViewHeightSizable];
+  [layout_view addSubview:pane_view];
+  [pane_view release];
+  return mrb_nil_value();
+}
+
 static NSString *
 mrbmacs_key_name(NSEvent *event)
 {
@@ -249,9 +417,9 @@ main(int argc, char **argv)
     mrb_value echo_native_handle;
     NSView *view;
     NSView *echo_view;
-    NSTextField *modeline_view;
+    NSView *layout_view;
+    NSView *pane_view;
     CGFloat echo_height = 24.0;
-    CGFloat modeline_height = 22.0;
 
     [application setActivationPolicy:NSApplicationActivationPolicyRegular];
     create_application_menu();
@@ -313,6 +481,22 @@ main(int argc, char **argv)
     mrb_define_method(
       mrbmacs_mrb, frame_class, "wait_confirmation_event",
       mrbmacs_frame_wait_confirmation_event, MRB_ARGS_NONE()
+    );
+    mrb_define_method(
+      mrbmacs_mrb, frame_class, "split_native_pane",
+      mrbmacs_frame_split_native_pane, MRB_ARGS_REQ(3)
+    );
+    mrb_define_method(
+      mrbmacs_mrb, frame_class, "pane_can_split?",
+      mrbmacs_frame_pane_can_split, MRB_ARGS_REQ(3)
+    );
+    mrb_define_method(
+      mrbmacs_mrb, frame_class, "remove_native_pane",
+      mrbmacs_frame_remove_native_pane, MRB_ARGS_REQ(1)
+    );
+    mrb_define_method(
+      mrbmacs_mrb, frame_class, "keep_only_native_pane",
+      mrbmacs_frame_keep_only_native_pane, MRB_ARGS_REQ(1)
     );
     application_class = mrb_class_get_under(
       mrbmacs_mrb, mrbmacs, "ApplicationCocoa"
@@ -399,38 +583,28 @@ main(int argc, char **argv)
       autorelease
     ];
     [window setTitle:@"mrbmacs Cocoa"];
-    modeline_view = [[[NSTextField alloc] initWithFrame:NSZeroRect] autorelease];
-    [modeline_view setEditable:NO];
-    [modeline_view setSelectable:NO];
-    [modeline_view setBezeled:NO];
-    [modeline_view setDrawsBackground:YES];
-    [modeline_view setFont:[NSFont monospacedSystemFontOfSize:12.0 weight:NSFontWeightRegular]];
-    [modeline_view setLineBreakMode:NSLineBreakByTruncatingTail];
-    mrb_funcall(
-      mrbmacs_mrb, pane, "modeline_native_handle=", 1,
-      mrb_int_value(mrbmacs_mrb, (mrb_int)(intptr_t)modeline_view)
-    );
+    layout_view = [[[NSView alloc] initWithFrame:NSMakeRect(
+      0, echo_height, window.contentView.bounds.size.width,
+      window.contentView.bounds.size.height - echo_height
+    )] autorelease];
+    [layout_view setAutoresizingMask:NSViewWidthSizable | NSViewHeightSizable];
+    pane_view = mrbmacs_create_pane_native_view(mrbmacs_mrb, pane);
+    [pane_view setFrame:layout_view.bounds];
+    [pane_view setAutoresizingMask:NSViewWidthSizable | NSViewHeightSizable];
+    [layout_view addSubview:pane_view];
     mrb_funcall(
       mrbmacs_mrb, mrbmacs_frame, "native_handle=", 1,
       mrb_int_value(mrbmacs_mrb, (mrb_int)(intptr_t)window)
     );
-    [view setFrame:NSMakeRect(
-      0,
-      echo_height + modeline_height,
-      window.contentView.bounds.size.width,
-      window.contentView.bounds.size.height - echo_height - modeline_height
-    )];
-    [view setAutoresizingMask:NSViewWidthSizable | NSViewHeightSizable];
-    [modeline_view setFrame:NSMakeRect(
-      0, echo_height, window.contentView.bounds.size.width, modeline_height
-    )];
-    [modeline_view setAutoresizingMask:NSViewWidthSizable | NSViewMaxYMargin];
+    mrb_funcall(
+      mrbmacs_mrb, mrbmacs_frame, "layout_native_handle=", 1,
+      mrb_int_value(mrbmacs_mrb, (mrb_int)(intptr_t)layout_view)
+    );
     [echo_view setFrame:NSMakeRect(
       0, 0, window.contentView.bounds.size.width, echo_height
     )];
     [echo_view setAutoresizingMask:NSViewWidthSizable | NSViewMaxYMargin];
-    [window.contentView addSubview:view];
-    [window.contentView addSubview:modeline_view];
+    [window.contentView addSubview:layout_view];
     [window.contentView addSubview:echo_view];
     [window center];
     [window makeKeyAndOrderFront:nil];

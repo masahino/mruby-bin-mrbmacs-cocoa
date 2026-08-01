@@ -24,10 +24,12 @@ The initial implementation:
 - switches buffers with `C-x b` and kills buffers with `C-x k`;
 - searches incrementally through the echo area with `C-s` and `C-r`;
 - replaces text with `M-x replace-string` and `M-%` query replace;
+- splits panes with `C-x 2` and `C-x 3`, cycles them with `C-x o`,
+  and removes them with `C-x 0` or `C-x 1`;
 - displays the shared mrbmacs mode line in each Cocoa pane;
 - provides a standard application menu and Quit command.
 
-Pane splitting, native tabs, and the remaining
+Native tabs and the remaining
 `mruby-mrbmacs-base` integration will be added incrementally.
 
 Tabs represent complete pane layouts rather than individual buffers. This
