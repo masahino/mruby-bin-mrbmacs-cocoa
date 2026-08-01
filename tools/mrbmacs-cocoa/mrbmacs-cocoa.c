@@ -83,6 +83,36 @@ mrbmacs_pane_update_native_modeline(mrb_state *mrb, mrb_value self)
   return mrb_nil_value();
 }
 
+static NSColor *
+mrbmacs_color_from_scintilla(mrb_int color)
+{
+  return [NSColor colorWithCalibratedRed:(color & 0xff) / 255.0
+    green:((color >> 8) & 0xff) / 255.0
+    blue:((color >> 16) & 0xff) / 255.0
+    alpha:1.0];
+}
+
+static mrb_value
+mrbmacs_pane_update_native_modeline_theme(mrb_state *mrb, mrb_value self)
+{
+  mrb_int foreground;
+  mrb_int background;
+  mrb_value native_handle;
+  NSTextField *modeline;
+
+  mrb_get_args(mrb, "ii", &foreground, &background);
+  native_handle = mrb_iv_get(
+    mrb, self, mrb_intern_lit(mrb, "@modeline_native_handle")
+  );
+  if (mrb_nil_p(native_handle)) {
+    return mrb_nil_value();
+  }
+  modeline = (NSTextField *)(intptr_t)mrb_integer(native_handle);
+  [modeline setTextColor:mrbmacs_color_from_scintilla(foreground)];
+  [modeline setBackgroundColor:mrbmacs_color_from_scintilla(background)];
+  return mrb_nil_value();
+}
+
 static NSView *
 mrbmacs_create_pane_native_view(mrb_state *mrb, mrb_value pane)
 {
@@ -464,6 +494,10 @@ main(int argc, char **argv)
     mrb_define_method(
       mrbmacs_mrb, pane_class, "update_native_modeline",
       mrbmacs_pane_update_native_modeline, MRB_ARGS_REQ(1)
+    );
+    mrb_define_method(
+      mrbmacs_mrb, pane_class, "update_native_modeline_theme",
+      mrbmacs_pane_update_native_modeline_theme, MRB_ARGS_REQ(2)
     );
     tab_class = mrb_class_get_under(
       mrbmacs_mrb, mrbmacs, "TabCocoa"

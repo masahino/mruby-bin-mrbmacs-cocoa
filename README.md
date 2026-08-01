@@ -27,6 +27,8 @@ The initial implementation:
 - splits panes with `C-x 2` and `C-x 3`, selects them by click or `C-x o`,
   and removes them with `C-x 0` or `C-x 1`;
 - displays the shared mrbmacs mode line in each Cocoa pane;
+- applies the configured mrbmacs theme to editor panes and native mode lines,
+  with runtime selection through `M-x select-theme`;
 - provides a standard application menu and Quit command.
 
 Native tabs and the remaining

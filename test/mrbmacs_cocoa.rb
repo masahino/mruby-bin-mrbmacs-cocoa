@@ -63,6 +63,7 @@ class CocoaViewForLayoutTest
   attr_reader :horizontal_scrollbar, :messages, :save_point
   attr_reader :search_lengths, :selections
   attr_reader :replacement_lengths, :undo_actions
+  attr_reader :theme_messages
   attr_reader :vertical_scrollbar
 
   def initialize(docpointer = 100)
@@ -85,6 +86,7 @@ class CocoaViewForLayoutTest
     @selections = []
     @target_start = 0
     @target_end = 0
+    @theme_messages = []
     @undo_actions = []
   end
 
@@ -226,6 +228,94 @@ class CocoaViewForLayoutTest
 
   def sci_set_lexer_language(language)
     @messages << [:lexer, language]
+  end
+
+  def sci_style_set_fore(style, color)
+    @theme_messages << [:style_fore, style, color]
+  end
+
+  def sci_style_set_back(style, color)
+    @theme_messages << [:style_back, style, color]
+  end
+
+  def sci_style_clear_all
+    @theme_messages << :style_clear_all
+  end
+
+  def sci_style_set_italic(style, value)
+    @theme_messages << [:style_italic, style, value]
+  end
+
+  def sci_style_set_bold(style, value)
+    @theme_messages << [:style_bold, style, value]
+  end
+
+  def sci_annotation_set_visible(value)
+    @theme_messages << [:annotation_visible, value]
+  end
+
+  def sci_marker_set_fore(marker, color)
+    @theme_messages << [:marker_fore, marker, color]
+  end
+
+  def sci_marker_set_back(marker, color)
+    @theme_messages << [:marker_back, marker, color]
+  end
+
+  def sci_set_caret_line_visible(value)
+    @theme_messages << [:caret_line_visible, value]
+  end
+
+  def sci_set_caret_line_back(color)
+    @theme_messages << [:caret_line_back, color]
+  end
+
+  def sci_set_sel_fore(use_setting, color)
+    @theme_messages << [:selection_fore, use_setting, color]
+  end
+
+  def sci_set_sel_back(use_setting, color)
+    @theme_messages << [:selection_back, use_setting, color]
+  end
+
+  def sci_set_fold_margin_colour(use_setting, color)
+    @theme_messages << [:fold_margin_color, use_setting, color]
+  end
+
+  def sci_set_fold_margin_hicolour(use_setting, color)
+    @theme_messages << [:fold_margin_highlight, use_setting, color]
+  end
+
+  def sci_set_keywords(index, keywords)
+    @theme_messages << [:keywords, index, keywords]
+  end
+
+  def sci_set_property(name, value)
+    @theme_messages << [:property, name, value]
+  end
+
+  def sci_set_tab_width(width)
+    @theme_messages << [:tab_width, width]
+  end
+
+  def sci_set_use_tabs(value)
+    @theme_messages << [:use_tabs, value]
+  end
+
+  def sci_set_tab_indents(value)
+    @theme_messages << [:tab_indents, value]
+  end
+
+  def sci_set_back_space_un_indents(value)
+    @theme_messages << [:backspace_unindents, value]
+  end
+
+  def sci_set_indent(width)
+    @theme_messages << [:indent, width]
+  end
+
+  def sci_set_wrap_mode(mode)
+    @theme_messages << [:wrap_mode, mode]
   end
 
   def sci_set_anchor(position)
@@ -417,6 +507,25 @@ assert('Mrbmacs::ApplicationCocoa owns its Cocoa frame and initial buffer') do
   assert_equal [buffer], app.buffer_list
   assert_equal({}, app.sci_handler)
   assert_kind_of Mrbmacs::Config, app.config
+  assert_kind_of Mrbmacs::SolarizedDarkTheme, app.theme
+  assert_true pane.view.theme_messages.include?(
+    [:style_fore, Scintilla::STYLE_DEFAULT, app.theme.foreground_color]
+  )
+end
+
+assert('Mrbmacs::PaneCocoa applies active native mode line colors') do
+  pane = Mrbmacs::PaneCocoa.new(CocoaViewForLayoutTest.new)
+  calls = []
+  pane.define_singleton_method(:update_native_modeline_theme) do |fore, back|
+    calls << [fore, back]
+  end
+  pane.modeline_native_handle = 1
+  theme = Mrbmacs::SolarizedDarkTheme.new
+
+  pane.apply_theme(theme)
+  pane.apply_modeline_theme(true)
+
+  assert_equal [theme.font_color[:color_mode_line][0, 2]], calls
 end
 
 assert('Mrbmacs::ApplicationCocoa follows native pane focus') do
