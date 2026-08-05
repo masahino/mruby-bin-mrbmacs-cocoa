@@ -29,6 +29,8 @@ The initial implementation:
 - displays the shared mrbmacs mode line in each Cocoa pane;
 - applies the configured mrbmacs theme to editor panes and native mode lines,
   with runtime selection through `M-x select-theme`;
+- uses Menlo 14 by default and opens the native font panel with
+  `M-x select-font`;
 - provides a standard application menu and Quit command.
 
 Native tabs and the remaining

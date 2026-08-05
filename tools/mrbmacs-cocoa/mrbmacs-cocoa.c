@@ -11,12 +11,56 @@ static mrb_value mrbmacs_app;
 static id key_event_monitor;
 static NSView *mrbmacs_echo_native_view;
 static BOOL mrbmacs_confirmation_input;
+static id mrbmacs_font_target;
 
 enum {
   MRBMACS_MODAL_RESPONSE_TAB = 1001,
   MRBMACS_MODAL_RESPONSE_YES,
   MRBMACS_MODAL_RESPONSE_NO
 };
+
+@interface MrbmacsModelineView : NSView
+@property(nonatomic, readonly) NSTextField *label;
+@end
+
+@implementation MrbmacsModelineView {
+  NSTextField *_label;
+}
+
+- (id)initWithFrame:(NSRect)frame
+{
+  self = [super initWithFrame:frame];
+  if (self != nil) {
+    _label = [[[NSTextField alloc] initWithFrame:NSZeroRect] autorelease];
+    [_label setEditable:NO];
+    [_label setSelectable:NO];
+    [_label setBezeled:NO];
+    [_label setDrawsBackground:NO];
+    [_label setLineBreakMode:NSLineBreakByTruncatingTail];
+    [_label setAutoresizingMask:NSViewWidthSizable];
+    [self setWantsLayer:YES];
+    [self addSubview:_label];
+  }
+  return self;
+}
+
+- (NSTextField *)label
+{
+  return _label;
+}
+
+- (void)layout
+{
+  [_label sizeToFit];
+  CGFloat height = NSHeight(_label.frame);
+  [_label setFrame:NSMakeRect(
+    0,
+    floor((NSHeight(self.bounds) - height) / 2.0),
+    NSWidth(self.bounds),
+    height
+  )];
+}
+@end
 
 static void print_mruby_error(mrb_state *mrb);
 
@@ -69,7 +113,7 @@ mrbmacs_pane_update_native_modeline(mrb_state *mrb, mrb_value self)
 {
   char *text;
   mrb_value native_handle;
-  NSTextField *modeline;
+  MrbmacsModelineView *modeline;
 
   mrb_get_args(mrb, "z", &text);
   native_handle = mrb_iv_get(
@@ -78,8 +122,9 @@ mrbmacs_pane_update_native_modeline(mrb_state *mrb, mrb_value self)
   if (mrb_nil_p(native_handle)) {
     return mrb_nil_value();
   }
-  modeline = (NSTextField *)(intptr_t)mrb_integer(native_handle);
-  [modeline setStringValue:[NSString stringWithUTF8String:text]];
+  modeline = (MrbmacsModelineView *)(intptr_t)mrb_integer(native_handle);
+  [modeline.label setStringValue:[NSString stringWithUTF8String:text]];
+  [modeline setNeedsLayout:YES];
   return mrb_nil_value();
 }
 
@@ -98,7 +143,7 @@ mrbmacs_pane_update_native_modeline_theme(mrb_state *mrb, mrb_value self)
   mrb_int foreground;
   mrb_int background;
   mrb_value native_handle;
-  NSTextField *modeline;
+  MrbmacsModelineView *modeline;
 
   mrb_get_args(mrb, "ii", &foreground, &background);
   native_handle = mrb_iv_get(
@@ -107,9 +152,130 @@ mrbmacs_pane_update_native_modeline_theme(mrb_state *mrb, mrb_value self)
   if (mrb_nil_p(native_handle)) {
     return mrb_nil_value();
   }
-  modeline = (NSTextField *)(intptr_t)mrb_integer(native_handle);
-  [modeline setTextColor:mrbmacs_color_from_scintilla(foreground)];
-  [modeline setBackgroundColor:mrbmacs_color_from_scintilla(background)];
+  modeline = (MrbmacsModelineView *)(intptr_t)mrb_integer(native_handle);
+  [modeline.label setTextColor:mrbmacs_color_from_scintilla(foreground)];
+  modeline.layer.backgroundColor =
+    mrbmacs_color_from_scintilla(background).CGColor;
+  return mrb_nil_value();
+}
+
+static mrb_value
+mrbmacs_pane_update_native_modeline_font(mrb_state *mrb, mrb_value self)
+{
+  char *name;
+  mrb_int size;
+  mrb_value native_handle;
+  MrbmacsModelineView *modeline;
+  NSFont *font;
+
+  mrb_get_args(mrb, "zi", &name, &size);
+  native_handle = mrb_iv_get(
+    mrb, self, mrb_intern_lit(mrb, "@modeline_native_handle")
+  );
+  if (mrb_nil_p(native_handle)) {
+    return mrb_nil_value();
+  }
+  modeline = (MrbmacsModelineView *)(intptr_t)mrb_integer(native_handle);
+  font = [NSFont fontWithName:[NSString stringWithUTF8String:name]
+    size:(CGFloat)size];
+  if (font != nil) {
+    [modeline.label setFont:font];
+    CGFloat height = ceil(
+      font.ascender - font.descender + font.leading
+    ) + 6.0;
+    NSView *container = modeline.superview;
+    if (container != nil) {
+      [modeline setFrame:NSMakeRect(
+        0, 0, container.bounds.size.width, height
+      )];
+      for (NSView *view in container.subviews) {
+        if (view != modeline) {
+          [view setFrame:NSMakeRect(
+            0, height, container.bounds.size.width,
+            MAX(0, container.bounds.size.height - height)
+          )];
+        }
+      }
+      [modeline setNeedsLayout:YES];
+      [modeline layoutSubtreeIfNeeded];
+    }
+  }
+  return mrb_nil_value();
+}
+
+static mrb_value
+mrbmacs_frame_update_native_echo_height(mrb_state *mrb, mrb_value self)
+{
+  mrb_int requested_height;
+  mrb_value native_handle;
+  mrb_value layout_handle;
+  NSWindow *window;
+  NSView *layout;
+  CGFloat height;
+
+  mrb_get_args(mrb, "i", &requested_height);
+  native_handle = mrb_iv_get(
+    mrb, self, mrb_intern_lit(mrb, "@native_handle")
+  );
+  layout_handle = mrb_iv_get(
+    mrb, self, mrb_intern_lit(mrb, "@layout_native_handle")
+  );
+  if (mrb_nil_p(native_handle) || mrb_nil_p(layout_handle)) {
+    return mrb_nil_value();
+  }
+  height = (CGFloat)requested_height;
+  window = (NSWindow *)(intptr_t)mrb_integer(native_handle);
+  layout = (NSView *)(intptr_t)mrb_integer(layout_handle);
+  [mrbmacs_echo_native_view setFrame:NSMakeRect(
+    0, 0, window.contentView.bounds.size.width, height
+  )];
+  [layout setFrame:NSMakeRect(
+    0, height, window.contentView.bounds.size.width,
+    MAX(0, window.contentView.bounds.size.height - height)
+  )];
+  return mrb_nil_value();
+}
+
+@interface MrbmacsFontTarget : NSObject
+- (void)changeFont:(id)sender;
+@end
+
+@implementation MrbmacsFontTarget
+- (void)changeFont:(id)sender
+{
+  NSFont *font = [sender convertFont:[sender selectedFont]];
+  if (font == nil) {
+    return;
+  }
+  mrb_funcall(
+    mrbmacs_mrb, mrbmacs_frame, "set_font", 2,
+    mrb_str_new_cstr(mrbmacs_mrb, font.familyName.UTF8String),
+    mrb_int_value(mrbmacs_mrb, (mrb_int)font.pointSize)
+  );
+  if (mrbmacs_mrb->exc != NULL) {
+    print_mruby_error(mrbmacs_mrb);
+  }
+}
+@end
+
+static mrb_value
+mrbmacs_frame_select_font(mrb_state *mrb, mrb_value self)
+{
+  NSFontManager *manager = [NSFontManager sharedFontManager];
+  mrb_value name = mrb_iv_get(
+    mrb, self, mrb_intern_lit(mrb, "@font_name")
+  );
+  mrb_value size = mrb_iv_get(
+    mrb, self, mrb_intern_lit(mrb, "@font_size")
+  );
+  NSFont *font = [NSFont fontWithName:
+    [NSString stringWithUTF8String:mrb_str_to_cstr(mrb, name)]
+    size:(CGFloat)mrb_integer(size)];
+
+  [manager setTarget:mrbmacs_font_target];
+  [manager setAction:@selector(changeFont:)];
+  [manager setSelectedFont:font isMultiple:NO];
+  [manager orderFrontFontPanel:nil];
   return mrb_nil_value();
 }
 
@@ -121,22 +287,18 @@ mrbmacs_create_pane_native_view(mrb_state *mrb, mrb_value pane)
   mrb_value native_handle;
   NSView *view;
   NSView *container;
-  NSTextField *modeline;
+  MrbmacsModelineView *modeline;
 
   view_value = mrb_funcall(mrb, pane, "view", 0);
   native_handle = mrb_funcall(mrb, view_value, "native_handle", 0);
   view = (NSView *)(intptr_t)mrb_integer(native_handle);
   container = [[[NSView alloc]
     initWithFrame:NSMakeRect(0, 0, 100, 100)] autorelease];
-  modeline = [[[NSTextField alloc] initWithFrame:NSZeroRect] autorelease];
-  [modeline setEditable:NO];
-  [modeline setSelectable:NO];
-  [modeline setBezeled:NO];
-  [modeline setDrawsBackground:YES];
-  [modeline setFont:[NSFont
+  modeline = [[[MrbmacsModelineView alloc]
+    initWithFrame:NSZeroRect] autorelease];
+  [modeline.label setFont:[NSFont
     monospacedSystemFontOfSize:12.0
     weight:NSFontWeightRegular]];
-  [modeline setLineBreakMode:NSLineBreakByTruncatingTail];
   [view setFrame:NSMakeRect(
     0, modeline_height, container.bounds.size.width,
     container.bounds.size.height - modeline_height
@@ -499,6 +661,10 @@ main(int argc, char **argv)
       mrbmacs_mrb, pane_class, "update_native_modeline_theme",
       mrbmacs_pane_update_native_modeline_theme, MRB_ARGS_REQ(2)
     );
+    mrb_define_method(
+      mrbmacs_mrb, pane_class, "update_native_modeline_font",
+      mrbmacs_pane_update_native_modeline_font, MRB_ARGS_REQ(2)
+    );
     tab_class = mrb_class_get_under(
       mrbmacs_mrb, mrbmacs, "TabCocoa"
     );
@@ -515,6 +681,14 @@ main(int argc, char **argv)
     mrb_define_method(
       mrbmacs_mrb, frame_class, "wait_confirmation_event",
       mrbmacs_frame_wait_confirmation_event, MRB_ARGS_NONE()
+    );
+    mrb_define_method(
+      mrbmacs_mrb, frame_class, "select_font",
+      mrbmacs_frame_select_font, MRB_ARGS_NONE()
+    );
+    mrb_define_method(
+      mrbmacs_mrb, frame_class, "update_native_echo_height",
+      mrbmacs_frame_update_native_echo_height, MRB_ARGS_REQ(1)
     );
     mrb_define_method(
       mrbmacs_mrb, frame_class, "split_native_pane",
@@ -535,6 +709,7 @@ main(int argc, char **argv)
     application_class = mrb_class_get_under(
       mrbmacs_mrb, mrbmacs, "ApplicationCocoa"
     );
+    mrbmacs_font_target = [[MrbmacsFontTarget alloc] init];
 
     buffer = mrb_funcall(
       mrbmacs_mrb, mrb_obj_value(buffer_class), "new", 1,
@@ -640,6 +815,17 @@ main(int argc, char **argv)
     [echo_view setAutoresizingMask:NSViewWidthSizable | NSViewMaxYMargin];
     [window.contentView addSubview:layout_view];
     [window.contentView addSubview:echo_view];
+    mrb_funcall(
+      mrbmacs_mrb, mrbmacs_frame, "set_font", 2,
+      mrb_iv_get(
+        mrbmacs_mrb, mrbmacs_frame,
+        mrb_intern_lit(mrbmacs_mrb, "@font_name")
+      ),
+      mrb_iv_get(
+        mrbmacs_mrb, mrbmacs_frame,
+        mrb_intern_lit(mrbmacs_mrb, "@font_size")
+      )
+    );
     [window center];
     [window makeKeyAndOrderFront:nil];
     [window makeFirstResponder:view];

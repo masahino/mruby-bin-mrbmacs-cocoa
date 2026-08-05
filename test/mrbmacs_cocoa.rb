@@ -250,6 +250,22 @@ class CocoaViewForLayoutTest
     @theme_messages << [:style_bold, style, value]
   end
 
+  def sci_style_set_font(style, name)
+    @theme_messages << [:style_font, style, name]
+  end
+
+  def sci_style_set_size(style, size)
+    @theme_messages << [:style_size, style, size]
+  end
+
+  def sci_set_extra_ascent(value)
+    @theme_messages << [:extra_ascent, value]
+  end
+
+  def sci_set_extra_descent(value)
+    @theme_messages << [:extra_descent, value]
+  end
+
   def sci_annotation_set_visible(value)
     @theme_messages << [:annotation_visible, value]
   end
@@ -526,6 +542,33 @@ assert('Mrbmacs::PaneCocoa applies active native mode line colors') do
   pane.apply_modeline_theme(true)
 
   assert_equal [theme.font_color[:color_mode_line][0, 2]], calls
+end
+
+assert('Mrbmacs::FrameCocoa applies a font to every pane and echo area') do
+  buffer = Mrbmacs::Buffer.new('*scratch*')
+  first = Mrbmacs::PaneCocoa.new(CocoaViewForLayoutTest.new(101), buffer)
+  second = Mrbmacs::PaneCocoa.new(CocoaViewForLayoutTest.new(102), buffer)
+  tab = Mrbmacs::TabCocoa.new(first)
+  tab.split(first, second, :vertical)
+  echo_win = CocoaViewForLayoutTest.new(103)
+  frame = Mrbmacs::FrameCocoa.new(tab, echo_win)
+  theme = Mrbmacs::SolarizedDarkTheme.new
+  frame.apply_theme(theme)
+  frame.set_font('Monaco', 16)
+
+  [first.view, second.view, echo_win].each do |view|
+    assert_true view.theme_messages.include?(
+      [:style_font, Scintilla::STYLE_DEFAULT, 'Monaco']
+    )
+    assert_true view.theme_messages.include?(
+      [:style_size, Scintilla::STYLE_DEFAULT, 16]
+    )
+  end
+  [first.view, second.view].each do |view|
+    assert_true view.theme_messages.include?(:style_clear_all)
+  end
+  assert_true echo_win.theme_messages.include?([:extra_ascent, 3])
+  assert_true echo_win.theme_messages.include?([:extra_descent, 3])
 end
 
 assert('Mrbmacs::ApplicationCocoa follows native pane focus') do
@@ -1118,6 +1161,9 @@ assert('Mrbmacs::FrameCocoa displays messages in its shared echo area') do
   assert_same echo_win, frame.echo_win
   assert_false echo_win.horizontal_scrollbar
   assert_false echo_win.vertical_scrollbar
+  (0..2).each do |margin|
+    assert_true echo_win.messages.include?([:margin_width, margin, 0])
+  end
   assert_equal 'New file', echo_win.text
   assert_true echo_win.messages.include?(:document_end)
   assert_equal 'New file', frame.last_message
