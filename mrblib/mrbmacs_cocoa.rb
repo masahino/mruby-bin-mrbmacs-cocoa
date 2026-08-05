@@ -34,6 +34,10 @@ module Mrbmacs
     def query_replace
       start_replace(true)
     end
+
+    def select_font
+      @frame.select_font
+    end
   end
 
   # A single editor area. A pane owns its Scintilla view and displays one
@@ -42,7 +46,7 @@ module Mrbmacs
     attr_reader :view
     attr_reader :buffer
     attr_reader :modeline_text
-    attr_accessor :modeline_native_handle
+    attr_reader :modeline_native_handle
     attr_accessor :layout_native_handle, :parent
 
     def initialize(view, buffer = nil)
@@ -93,6 +97,21 @@ module Mrbmacs
     def modeline_text=(text)
       @modeline_text = text.to_s
       update_native_modeline(@modeline_text) unless @modeline_native_handle.nil?
+    end
+
+    def modeline_native_handle=(handle)
+      @modeline_native_handle = handle
+      return if handle.nil? || @font_name.nil?
+
+      update_native_modeline_font(@font_name, @font_size)
+    end
+
+    def set_font(name, size)
+      @font_name = name
+      @font_size = size
+      @view.sci_style_set_font(Scintilla::STYLE_DEFAULT, name)
+      @view.sci_style_set_size(Scintilla::STYLE_DEFAULT, size)
+      update_native_modeline_font(name, size) unless @modeline_native_handle.nil?
     end
 
     def apply_theme(theme)
@@ -214,6 +233,7 @@ module Mrbmacs
   # One native macOS window containing one or more tabs.
   class FrameCocoa < FrameBase
     attr_reader :echo_win
+    attr_reader :font_name, :font_size
     attr_reader :tabs
     attr_reader :last_message
     attr_accessor :active_tab, :native_handle, :layout_native_handle
@@ -230,8 +250,10 @@ module Mrbmacs
         @echo_win.notification_callback = EchoNotificationBridge.new
         @echo_win.sci_set_hscrollbar(false)
         @echo_win.sci_set_vscrollbar(false)
+        (0..2).each { |margin| @echo_win.sci_set_margin_widthn(margin, 0) }
         @echo_win.sci_set_margin_typen(3, 4)
       end
+      set_font('Menlo', 14)
     end
 
     def active_pane
@@ -266,11 +288,52 @@ module Mrbmacs
     end
 
     def apply_theme(theme)
+      @theme = theme
       @tabs.each do |tab|
         tab.panes.each do |pane|
           pane.apply_theme(theme)
           pane.apply_modeline_theme(pane.equal?(active_pane))
         end
+      end
+      apply_echo_theme(theme) unless @echo_win.nil?
+    end
+
+    def apply_echo_theme(theme)
+      @echo_win.sci_style_set_fore(
+        Scintilla::STYLE_DEFAULT, theme.foreground_color
+      )
+      @echo_win.sci_style_set_back(
+        Scintilla::STYLE_DEFAULT, theme.background_color
+      )
+      @echo_win.sci_style_clear_all
+    end
+
+    def set_font(name, size)
+      @font_name = name
+      @font_size = size
+      @tabs.each do |tab|
+        tab.panes.each do |pane|
+          pane.set_font(name, size)
+          next if @theme.nil?
+
+          pane.apply_theme(@theme)
+          pane.buffer.mode.apply_theme(pane.sci, @theme) unless pane.buffer.nil?
+          pane.apply_mode_settings(pane.buffer.mode) unless pane.buffer.nil?
+        end
+      end
+      unless @echo_win.nil?
+        @echo_win.sci_style_set_font(Scintilla::STYLE_DEFAULT, name)
+        @echo_win.sci_style_set_size(Scintilla::STYLE_DEFAULT, size)
+        if @theme.nil?
+          @echo_win.sci_style_clear_all
+        else
+          apply_echo_theme(@theme)
+        end
+        @echo_win.sci_set_extra_ascent(3)
+        @echo_win.sci_set_extra_descent(3)
+      end
+      unless @native_handle.nil? || @echo_win.nil?
+        update_native_echo_height(@echo_win.sci_text_height(0))
       end
     end
 
@@ -757,6 +820,7 @@ module Mrbmacs
       new_pane = PaneCocoa.new(new_view, active_pane.buffer)
       new_view.sci_set_hscrollbar(false)
       apply_keymap(new_view, @keymap)
+      new_pane.set_font(@frame.font_name, @frame.font_size)
       unless @theme.nil?
         new_pane.apply_theme(@theme)
         apply_theme_to_mode(active_pane.buffer.mode, new_pane, @theme)
