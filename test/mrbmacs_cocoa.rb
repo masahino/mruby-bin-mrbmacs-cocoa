@@ -63,6 +63,7 @@ class CocoaViewForLayoutTest
   attr_reader :horizontal_scrollbar, :messages, :save_point
   attr_reader :search_lengths, :selections
   attr_reader :replacement_lengths, :undo_actions
+  attr_reader :caret_colors, :caret_styles
   attr_reader :margin_messages
   attr_reader :theme_messages
   attr_reader :vertical_scrollbar
@@ -74,6 +75,8 @@ class CocoaViewForLayoutTest
     @current_pos = 0
     @set_documents = []
     @messages = []
+    @caret_colors = []
+    @caret_styles = []
     @margin_messages = []
     @horizontal_scrollbar = true
     @vertical_scrollbar = true
@@ -156,6 +159,14 @@ class CocoaViewForLayoutTest
     @selection_end = end_pos
     @current_pos = end_pos
     @selections << [start_pos, end_pos]
+  end
+
+  def sci_set_caret_style(style)
+    @caret_styles << style
+  end
+
+  def sci_set_caret_fore(color)
+    @caret_colors << color
   end
 
   def sci_set_target_start(position)
@@ -579,6 +590,44 @@ assert('Mrbmacs::PaneCocoa configures its line number margin') do
   assert_equal margin_width_count + 1, view.margin_messages.count { |message|
     message == [:margin_width, Mrbmacs::EditWindow::MARGIN_LINE_NUMBER, 6]
   }
+end
+
+assert('Mrbmacs::PaneCocoa configures a Scintilla block caret') do
+  view = CocoaViewForLayoutTest.new
+  Mrbmacs::PaneCocoa.new(view)
+  style = Scintilla::CARETSTYLE_BLOCK_AFTER |
+          Scintilla::CARETSTYLE_OVERSTRIKE_BLOCK |
+          Scintilla::CARETSTYLE_BLOCK
+
+  assert_true view.caret_styles.include?(style)
+end
+
+assert('Mrbmacs::PaneCocoa uses the theme foreground for its caret') do
+  view = CocoaViewForLayoutTest.new
+  pane = Mrbmacs::PaneCocoa.new(view)
+  dark_theme = Mrbmacs::SolarizedDarkTheme.new
+  light_theme = Mrbmacs::SolarizedLightTheme.new
+
+  pane.apply_theme(dark_theme)
+  pane.apply_theme(light_theme)
+
+  assert_equal [dark_theme.foreground_color, light_theme.foreground_color],
+               view.caret_colors
+end
+
+assert('Mrbmacs::FrameCocoa configures its echo-area caret') do
+  pane = Mrbmacs::PaneCocoa.new(CocoaViewForLayoutTest.new)
+  echo_win = CocoaViewForLayoutTest.new
+  frame = Mrbmacs::FrameCocoa.new(Mrbmacs::TabCocoa.new(pane), echo_win)
+  theme = Mrbmacs::SolarizedDarkTheme.new
+  style = Scintilla::CARETSTYLE_BLOCK_AFTER |
+          Scintilla::CARETSTYLE_OVERSTRIKE_BLOCK |
+          Scintilla::CARETSTYLE_BLOCK
+
+  frame.apply_theme(theme)
+
+  assert_equal [style], echo_win.caret_styles
+  assert_equal [theme.foreground_color], echo_win.caret_colors
 end
 
 assert('Mrbmacs::FrameCocoa applies a font to every pane and echo area') do
