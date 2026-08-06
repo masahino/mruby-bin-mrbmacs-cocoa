@@ -69,3 +69,7 @@ Run the development executable:
 ./mruby/bin/mrbmacs-cocoa
 ./mruby/bin/mrbmacs-cocoa path/to/file
 ```
+
+The Cocoa frontend uses the shared mrbmacs command-line options and loads
+`~/.mrbmacsrc` during startup. Use `-q` to skip the init file or `-l FILE` to
+load an additional Ruby file.

@@ -65,15 +65,6 @@ module Mrbmacs
       @view
     end
 
-    def newline
-      case @view.sci_get_eol_mode
-      when Scintilla::SC_EOL_CRLF then 'CRLF'
-      when Scintilla::SC_EOL_CR then 'CR'
-      when Scintilla::SC_EOL_LF then 'LF'
-      else ''
-      end
-    end
-
     def modeline_text=(text)
       @modeline_text = text.to_s
       update_native_modeline(@modeline_text) unless @modeline_native_handle.nil?

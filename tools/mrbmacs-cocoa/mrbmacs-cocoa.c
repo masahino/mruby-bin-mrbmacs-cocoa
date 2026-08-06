@@ -1,6 +1,7 @@
 #import <Cocoa/Cocoa.h>
 
 #include <mruby.h>
+#include <mruby/array.h>
 #include <mruby/class.h>
 #include <mruby/string.h>
 #include <mruby/variable.h>
@@ -9,6 +10,7 @@ static mrb_state *mrbmacs_mrb;
 static mrb_value mrbmacs_frame;
 static mrb_value mrbmacs_app;
 static id key_event_monitor;
+static NSWindow *mrbmacs_window;
 static NSView *mrbmacs_echo_native_view;
 static BOOL mrbmacs_confirmation_input;
 static id mrbmacs_font_target;
@@ -321,6 +323,72 @@ mrbmacs_create_pane_native_view(mrb_state *mrb, mrb_value pane)
   return container;
 }
 
+static mrb_value
+mrbmacs_application_initialize_native_frame(mrb_state *mrb, mrb_value self)
+{
+  const CGFloat echo_height = 24.0;
+  NSRect window_frame = NSMakeRect(0, 0, 900, 650);
+  NSWindowStyleMask style =
+    NSWindowStyleMaskTitled |
+    NSWindowStyleMaskClosable |
+    NSWindowStyleMaskMiniaturizable |
+    NSWindowStyleMaskResizable;
+  mrb_value echo_view_value;
+  mrb_value echo_native_handle;
+  mrb_value pane;
+  NSView *echo_view;
+  NSView *layout_view;
+  NSView *pane_view;
+
+  mrbmacs_frame = mrb_iv_get(
+    mrb, self, mrb_intern_lit(mrb, "@frame")
+  );
+  pane = mrb_funcall(mrb, mrbmacs_frame, "active_pane", 0);
+  echo_view_value = mrb_funcall(mrb, mrbmacs_frame, "echo_win", 0);
+  echo_native_handle = mrb_funcall(mrb, echo_view_value, "native_handle", 0);
+  echo_view = (NSView *)(intptr_t)mrb_integer(echo_native_handle);
+  mrbmacs_echo_native_view = echo_view;
+
+  mrbmacs_window = [
+    [[NSWindow alloc]
+      initWithContentRect:window_frame
+      styleMask:style
+      backing:NSBackingStoreBuffered
+      defer:NO]
+    autorelease
+  ];
+  [mrbmacs_window setTitle:@"mrbmacs Cocoa"];
+  layout_view = [[[NSView alloc] initWithFrame:NSMakeRect(
+    0, echo_height, mrbmacs_window.contentView.bounds.size.width,
+    mrbmacs_window.contentView.bounds.size.height - echo_height
+  )] autorelease];
+  [layout_view setAutoresizingMask:NSViewWidthSizable | NSViewHeightSizable];
+  pane_view = mrbmacs_create_pane_native_view(mrb, pane);
+  [pane_view setFrame:layout_view.bounds];
+  [pane_view setAutoresizingMask:NSViewWidthSizable | NSViewHeightSizable];
+  [layout_view addSubview:pane_view];
+  mrb_funcall(
+    mrb, mrbmacs_frame, "native_handle=", 1,
+    mrb_int_value(mrb, (mrb_int)(intptr_t)mrbmacs_window)
+  );
+  mrb_funcall(
+    mrb, mrbmacs_frame, "layout_native_handle=", 1,
+    mrb_int_value(mrb, (mrb_int)(intptr_t)layout_view)
+  );
+  [echo_view setFrame:NSMakeRect(
+    0, 0, mrbmacs_window.contentView.bounds.size.width, echo_height
+  )];
+  [echo_view setAutoresizingMask:NSViewWidthSizable | NSViewMaxYMargin];
+  [mrbmacs_window.contentView addSubview:layout_view];
+  [mrbmacs_window.contentView addSubview:echo_view];
+  mrb_funcall(
+    mrb, mrbmacs_frame, "set_font", 2,
+    mrb_iv_get(mrb, mrbmacs_frame, mrb_intern_lit(mrb, "@font_name")),
+    mrb_iv_get(mrb, mrbmacs_frame, mrb_intern_lit(mrb, "@font_size"))
+  );
+  return mrb_nil_value();
+}
+
 static NSView *
 mrbmacs_pane_native_view(mrb_state *mrb, mrb_value pane)
 {
@@ -585,31 +653,14 @@ main(int argc, char **argv)
 {
   @autoreleasepool {
     NSApplication *application = [NSApplication sharedApplication];
-    NSRect frame = NSMakeRect(0, 0, 900, 650);
-    NSWindowStyleMask style =
-      NSWindowStyleMaskTitled |
-      NSWindowStyleMaskClosable |
-      NSWindowStyleMaskMiniaturizable |
-      NSWindowStyleMaskResizable;
-    NSWindow *window;
-    struct RClass *scintilla;
-    struct RClass *view_class;
     struct RClass *mrbmacs;
-    struct RClass *buffer_class;
     struct RClass *pane_class;
-    struct RClass *tab_class;
     struct RClass *frame_class;
     struct RClass *application_class;
     mrb_value mrbmacs_view;
     mrb_value mrbmacs_echo_view;
-    mrb_value buffer;
-    mrb_value pane;
-    mrb_value tab;
-    mrb_value echo_native_handle;
-    NSView *echo_view;
-    NSView *layout_view;
-    NSView *pane_view;
-    CGFloat echo_height = 24.0;
+    mrb_value arg_array;
+    int i;
 
     [application setActivationPolicy:NSApplicationActivationPolicyRegular];
     create_application_menu();
@@ -620,34 +671,7 @@ main(int argc, char **argv)
       return EXIT_FAILURE;
     }
 
-    scintilla = mrb_module_get(mrbmacs_mrb, "Scintilla");
-    view_class = mrb_class_get_under(
-      mrbmacs_mrb, scintilla, "ScintillaCocoa"
-    );
-    mrbmacs_view = mrb_funcall(
-      mrbmacs_mrb, mrb_obj_value(view_class), "new", 0
-    );
-    if (mrbmacs_mrb->exc != NULL) {
-      print_mruby_error(mrbmacs_mrb);
-      mrb_close(mrbmacs_mrb);
-      return EXIT_FAILURE;
-    }
-    /* C retains and uses the native handle for the lifetime of the app, so
-       keep its mruby wrapper registered for the same lifetime. */
-    mrb_gc_register(mrbmacs_mrb, mrbmacs_view);
-    mrbmacs_echo_view = mrb_funcall(
-      mrbmacs_mrb, mrb_obj_value(view_class), "new", 0
-    );
-    if (mrbmacs_mrb->exc != NULL) {
-      print_mruby_error(mrbmacs_mrb);
-      mrb_close(mrbmacs_mrb);
-      return EXIT_FAILURE;
-    }
-    mrb_gc_register(mrbmacs_mrb, mrbmacs_echo_view);
     mrbmacs = mrb_module_get(mrbmacs_mrb, "Mrbmacs");
-    buffer_class = mrb_class_get_under(
-      mrbmacs_mrb, mrbmacs, "Buffer"
-    );
     pane_class = mrb_class_get_under(
       mrbmacs_mrb, mrbmacs, "PaneCocoa"
     );
@@ -662,9 +686,6 @@ main(int argc, char **argv)
     mrb_define_method(
       mrbmacs_mrb, pane_class, "update_native_modeline_font",
       mrbmacs_pane_update_native_modeline_font, MRB_ARGS_REQ(2)
-    );
-    tab_class = mrb_class_get_under(
-      mrbmacs_mrb, mrbmacs, "TabCocoa"
     );
     frame_class = mrb_class_get_under(
       mrbmacs_mrb, mrbmacs, "FrameCocoa"
@@ -707,56 +728,38 @@ main(int argc, char **argv)
     application_class = mrb_class_get_under(
       mrbmacs_mrb, mrbmacs, "ApplicationCocoa"
     );
+    mrb_define_method(
+      mrbmacs_mrb, application_class, "initialize_native_frame",
+      mrbmacs_application_initialize_native_frame, MRB_ARGS_NONE()
+    );
     mrbmacs_font_target = [[MrbmacsFontTarget alloc] init];
-
-    buffer = mrb_funcall(
-      mrbmacs_mrb, mrb_obj_value(buffer_class), "new", 1,
-      argc > 1 ? mrb_str_new_cstr(mrbmacs_mrb, argv[1])
-               : mrb_str_new_lit(mrbmacs_mrb, "*scratch*")
-    );
-    if (mrbmacs_mrb->exc != NULL) {
-      print_mruby_error(mrbmacs_mrb);
-      mrb_close(mrbmacs_mrb);
-      return EXIT_FAILURE;
+    arg_array = mrb_ary_new_capa(mrbmacs_mrb, argc - 1);
+    for (i = 1; i < argc; i++) {
+      mrb_ary_push(
+        mrbmacs_mrb, arg_array, mrb_str_new_cstr(mrbmacs_mrb, argv[i])
+      );
     }
-    pane = mrb_funcall(
-      mrbmacs_mrb, mrb_obj_value(pane_class), "new", 2,
-      mrbmacs_view, buffer
-    );
-    if (mrbmacs_mrb->exc != NULL) {
-      print_mruby_error(mrbmacs_mrb);
-      mrb_close(mrbmacs_mrb);
-      return EXIT_FAILURE;
-    }
-    tab = mrb_funcall(
-      mrbmacs_mrb, mrb_obj_value(tab_class), "new", 1, pane
-    );
-    if (mrbmacs_mrb->exc != NULL) {
-      print_mruby_error(mrbmacs_mrb);
-      mrb_close(mrbmacs_mrb);
-      return EXIT_FAILURE;
-    }
-    mrbmacs_frame = mrb_funcall(
-      mrbmacs_mrb, mrb_obj_value(frame_class), "new", 2,
-      tab, mrbmacs_echo_view
-    );
-    if (mrbmacs_mrb->exc != NULL) {
-      print_mruby_error(mrbmacs_mrb);
-      mrb_close(mrbmacs_mrb);
-      return EXIT_FAILURE;
-    }
-    mrb_gc_register(mrbmacs_mrb, mrbmacs_frame);
-
     mrbmacs_app = mrb_funcall(
-      mrbmacs_mrb, mrb_obj_value(application_class), "new", 2,
-      mrbmacs_frame, buffer
+      mrbmacs_mrb, mrb_obj_value(application_class), "new", 1, arg_array
     );
     if (mrbmacs_mrb->exc != NULL) {
       print_mruby_error(mrbmacs_mrb);
       mrb_close(mrbmacs_mrb);
       return EXIT_FAILURE;
     }
+    mrbmacs_frame = mrb_iv_get(
+      mrbmacs_mrb, mrbmacs_app, mrb_intern_lit(mrbmacs_mrb, "@frame")
+    );
+    mrbmacs_view = mrb_funcall(
+      mrbmacs_mrb, mrbmacs_frame, "view", 0
+    );
+    mrbmacs_echo_view = mrb_funcall(
+      mrbmacs_mrb, mrbmacs_frame, "echo_win", 0
+    );
     mrb_gc_register(mrbmacs_mrb, mrbmacs_app);
+    mrb_gc_register(mrbmacs_mrb, mrbmacs_frame);
+    mrb_gc_register(mrbmacs_mrb, mrbmacs_view);
+    mrb_gc_register(mrbmacs_mrb, mrbmacs_echo_view);
     mrb_gv_set(
       mrbmacs_mrb, mrb_intern_lit(mrbmacs_mrb, "$app"), mrbmacs_app
     );
@@ -767,71 +770,8 @@ main(int argc, char **argv)
       }
     ];
 
-    mrbmacs_view = mrb_funcall(
-      mrbmacs_mrb, mrbmacs_frame, "view", 0
-    );
-
-    echo_native_handle = mrb_funcall(
-      mrbmacs_mrb, mrbmacs_echo_view, "native_handle", 0
-    );
-    echo_view = (NSView *)(intptr_t)mrb_integer(echo_native_handle);
-    mrbmacs_echo_native_view = echo_view;
-
-    window = [
-      [[NSWindow alloc]
-        initWithContentRect:frame
-        styleMask:style
-        backing:NSBackingStoreBuffered
-        defer:NO]
-      autorelease
-    ];
-    [window setTitle:@"mrbmacs Cocoa"];
-    layout_view = [[[NSView alloc] initWithFrame:NSMakeRect(
-      0, echo_height, window.contentView.bounds.size.width,
-      window.contentView.bounds.size.height - echo_height
-    )] autorelease];
-    [layout_view setAutoresizingMask:NSViewWidthSizable | NSViewHeightSizable];
-    pane_view = mrbmacs_create_pane_native_view(mrbmacs_mrb, pane);
-    [pane_view setFrame:layout_view.bounds];
-    [pane_view setAutoresizingMask:NSViewWidthSizable | NSViewHeightSizable];
-    [layout_view addSubview:pane_view];
-    mrb_funcall(
-      mrbmacs_mrb, mrbmacs_frame, "native_handle=", 1,
-      mrb_int_value(mrbmacs_mrb, (mrb_int)(intptr_t)window)
-    );
-    mrb_funcall(
-      mrbmacs_mrb, mrbmacs_frame, "layout_native_handle=", 1,
-      mrb_int_value(mrbmacs_mrb, (mrb_int)(intptr_t)layout_view)
-    );
-    [echo_view setFrame:NSMakeRect(
-      0, 0, window.contentView.bounds.size.width, echo_height
-    )];
-    [echo_view setAutoresizingMask:NSViewWidthSizable | NSViewMaxYMargin];
-    [window.contentView addSubview:layout_view];
-    [window.contentView addSubview:echo_view];
-    mrb_funcall(
-      mrbmacs_mrb, mrbmacs_frame, "set_font", 2,
-      mrb_iv_get(
-        mrbmacs_mrb, mrbmacs_frame,
-        mrb_intern_lit(mrbmacs_mrb, "@font_name")
-      ),
-      mrb_iv_get(
-        mrbmacs_mrb, mrbmacs_frame,
-        mrb_intern_lit(mrbmacs_mrb, "@font_size")
-      )
-    );
-    [window center];
-    [window makeKeyAndOrderFront:nil];
-
-    mrb_funcall(
-      mrbmacs_mrb, mrbmacs_app, "load_initial_file", 1,
-      argc > 1 ? mrb_str_new_cstr(mrbmacs_mrb, argv[1]) : mrb_nil_value()
-    );
-    if (mrbmacs_mrb->exc != NULL) {
-      print_mruby_error(mrbmacs_mrb);
-      mrb_close(mrbmacs_mrb);
-      return EXIT_FAILURE;
-    }
+    [mrbmacs_window center];
+    [mrbmacs_window makeKeyAndOrderFront:nil];
 
     [application activateIgnoringOtherApps:YES];
     mrb_funcall(mrbmacs_mrb, mrbmacs_view, "sci_grab_focus", 0);

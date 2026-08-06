@@ -15,15 +15,8 @@ module Mrbmacs
       win.sci_assign_cmdkey(keydef, command)
     end
 
-    def initialize(frame, buffer)
-      init_instance_variables
-      @logger = init_logfile
-      @frame = frame
-      @current_buffer = buffer
-      @buffer_list = [buffer]
-      @keymap = ViewKeyMap.new
-      @echo_keymap = EchoWinKeyMap.new
-      apply_keymap(@frame.echo_win, @echo_keymap) unless @frame.echo_win.nil?
+    def init_instance_variables
+      super
       @prefix_key = ''
       @isearch_active = false
       @isearch_backward = false
@@ -35,8 +28,14 @@ module Mrbmacs
       @replace_search_text = nil
       @replacement_text = nil
       @replace_next_pos = nil
-      init_theme
-      @command_list = Mrbmacs::Command.instance_methods.map(&:to_s).sort
+    end
+
+    def init_frame
+      view = Scintilla::ScintillaCocoa.new
+      echo_view = Scintilla::ScintillaCocoa.new
+      pane = PaneCocoa.new(view, @current_buffer)
+      @frame = FrameCocoa.new(TabCocoa.new(pane), echo_view)
+      initialize_native_frame
     end
 
     def sci_notify(notification)
@@ -355,37 +354,6 @@ module Mrbmacs
     # Like the terminal frontends, Cocoa currently switches documents in the
     # active pane. Native tab creation will be added with the tab UI.
     def add_buffer_to_frame(_buffer)
-    end
-
-    # The other frontends create *Messages* during Application initialization,
-    # so the shared switch_to_buffer implementation can use buffer_list[-2] as
-    # its default. Cocoa does not create that buffer yet and can start with only
-    # one buffer.
-    def switch_to_buffer(buffername = nil)
-      if buffername.nil? && @buffer_list.size == 1
-        buffername = @frame.select_buffer(
-          @current_buffer.name, @buffer_list.map(&:name)
-        )
-        return if buffername.nil?
-
-        buffername = @current_buffer.name if buffername == ''
-      end
-      super(buffername)
-    end
-
-    def apply_theme_to_mode(mode, edit_win, theme)
-      return if theme.nil?
-
-      super
-    end
-
-    # Use the shared file-loading path for command-line files as well as files
-    # opened after startup. A missing path therefore starts as an empty new
-    # file instead of placing an error message in the editor document.
-    def load_initial_file(filename = nil)
-      open_file(filename) unless filename.nil?
-      @frame.view.sci_set_save_point
-      @frame.modeline(self)
     end
 
     # Cocoa terminates its native event loop through FrameCocoa#exit. Avoid

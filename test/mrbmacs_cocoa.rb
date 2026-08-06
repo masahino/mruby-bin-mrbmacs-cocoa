@@ -23,6 +23,24 @@ class CocoaModelineApplicationForTest
   end
 end
 
+def build_cocoa_application_for_test(frame, buffer)
+  app = Mrbmacs::ApplicationCocoa.allocate
+  app.init_instance_variables
+  app.instance_variable_set(:@logger, app.init_logfile)
+  app.frame = frame
+  app.current_buffer = buffer
+  app.buffer_list = [buffer]
+  keymap = Mrbmacs::ViewKeyMap.new
+  echo_keymap = Mrbmacs::EchoWinKeyMap.new
+  app.instance_variable_set(:@keymap, keymap)
+  app.instance_variable_set(:@echo_keymap, echo_keymap)
+  app.apply_keymap(frame.echo_win, echo_keymap) unless frame.echo_win.nil?
+  app.init_theme
+  command_list = Mrbmacs::Command.instance_methods.map(&:to_s).sort
+  app.instance_variable_set(:@command_list, command_list)
+  app
+end
+
 class CocoaFrameForExitTest < Mrbmacs::FrameCocoa
   attr_reader :exited
 
@@ -485,6 +503,15 @@ class CocoaViewForLayoutTest
   end
 end
 
+assert('Mrbmacs::ApplicationCocoa uses the shared initializer') do
+  methods = Mrbmacs::ApplicationCocoa.instance_methods(false)
+
+  assert_false methods.include?(:initialize)
+  assert_false methods.include?(:init_buffer)
+  assert_true methods.include?(:init_frame)
+end
+
+
 assert('Mrbmacs::ScintillaNotificationBridge forwards to $app') do
   previous_app = $app
   receiver = CocoaNotificationReceiver.new
@@ -543,7 +570,7 @@ assert('Mrbmacs::ApplicationCocoa owns its Cocoa frame and initial buffer') do
   buffer = Mrbmacs::Buffer.new('*scratch*')
   pane = Mrbmacs::PaneCocoa.new(CocoaViewForLayoutTest.new, buffer)
   frame = Mrbmacs::FrameCocoa.new(Mrbmacs::TabCocoa.new(pane))
-  app = Mrbmacs::ApplicationCocoa.new(frame, buffer)
+  app = build_cocoa_application_for_test(frame, buffer)
 
   assert_same frame, app.frame
   assert_same buffer, app.current_buffer
@@ -561,7 +588,7 @@ assert('Mrbmacs::ApplicationCocoa applies the shared echo-area keymap') do
   pane = Mrbmacs::PaneCocoa.new(CocoaViewForLayoutTest.new, buffer)
   echo_win = CocoaViewForLayoutTest.new
   frame = Mrbmacs::FrameCocoa.new(Mrbmacs::TabCocoa.new(pane), echo_win)
-  Mrbmacs::ApplicationCocoa.new(frame, buffer)
+  build_cocoa_application_for_test(frame, buffer)
   ctrl = Scintilla::SCMOD_META << 16
 
   assert_true echo_win.command_keys.include?(
@@ -697,7 +724,7 @@ assert('Mrbmacs::ApplicationCocoa follows native pane focus') do
   tab = Mrbmacs::TabCocoa.new(first)
   tab.split(first, second, :vertical)
   frame = Mrbmacs::FrameCocoa.new(tab)
-  app = Mrbmacs::ApplicationCocoa.new(frame, first_buffer)
+  app = build_cocoa_application_for_test(frame, first_buffer)
   previous_app = $app
 
   begin
@@ -718,39 +745,6 @@ assert('Mrbmacs::ApplicationCocoa follows native pane focus') do
   end
 end
 
-assert('Mrbmacs::ApplicationCocoa starts a missing path as a new file') do
-  filename = "#{ENV['TMPDIR'] || '/tmp'}/mrbmacs-cocoa-new-#{$$}.txt"
-  File.delete(filename) if File.exist?(filename)
-  buffer = Mrbmacs::Buffer.new(filename)
-  view = CocoaViewForLayoutTest.new
-  frame = Mrbmacs::FrameCocoa.new(
-    Mrbmacs::TabCocoa.new(Mrbmacs::PaneCocoa.new(view, buffer))
-  )
-  app = Mrbmacs::ApplicationCocoa.new(frame, buffer)
-
-  app.load_initial_file(filename)
-
-  assert_equal '', view.text
-  assert_true view.save_point
-  assert_equal 'New file', frame.last_message
-  assert_equal File.expand_path(filename), app.current_buffer.filename
-end
-
-assert('Mrbmacs::ApplicationCocoa starts scratch as an empty saved document') do
-  buffer = Mrbmacs::Buffer.new('*scratch*')
-  view = CocoaViewForLayoutTest.new
-  frame = Mrbmacs::FrameCocoa.new(
-    Mrbmacs::TabCocoa.new(Mrbmacs::PaneCocoa.new(view, buffer))
-  )
-  app = Mrbmacs::ApplicationCocoa.new(frame, buffer)
-
-  app.load_initial_file
-
-  assert_equal '', view.text
-  assert_true view.save_point
-  assert_nil frame.last_message
-end
-
 assert('Mrbmacs::ApplicationCocoa opens a new file with shared find_file') do
   filename = "#{ENV['TMPDIR'] || '/tmp'}/mrbmacs-cocoa-find-#{$$}.rb"
   File.delete(filename) if File.exist?(filename)
@@ -758,7 +752,7 @@ assert('Mrbmacs::ApplicationCocoa opens a new file with shared find_file') do
   view = CocoaViewForLayoutTest.new
   pane = Mrbmacs::PaneCocoa.new(view, buffer)
   frame = Mrbmacs::FrameCocoa.new(Mrbmacs::TabCocoa.new(pane))
-  app = Mrbmacs::ApplicationCocoa.new(frame, buffer)
+  app = build_cocoa_application_for_test(frame, buffer)
 
   app.find_file(filename)
 
@@ -776,7 +770,7 @@ assert('Mrbmacs::ApplicationCocoa switches safely with only one buffer') do
     Mrbmacs::TabCocoa.new(Mrbmacs::PaneCocoa.new(view, buffer)), echo_win
   )
   frame.input_events = [[:enter, '']]
-  app = Mrbmacs::ApplicationCocoa.new(frame, buffer)
+  app = build_cocoa_application_for_test(frame, buffer)
 
   assert_true app.key_press('C-x')
   assert_true app.key_press('b')
@@ -791,7 +785,7 @@ assert('Mrbmacs::ApplicationCocoa kills a buffer through shared command') do
   frame = CocoaFrameForConfirmationTest.new(
     Mrbmacs::TabCocoa.new(Mrbmacs::PaneCocoa.new(view, buffer)), echo_win
   )
-  app = Mrbmacs::ApplicationCocoa.new(frame, buffer)
+  app = build_cocoa_application_for_test(frame, buffer)
   filename = "#{ENV['TMPDIR'] || '/tmp'}/mrbmacs-kill-#{$$}.txt"
   app.find_file(filename)
   frame.input_events = [[:enter, '']]
@@ -810,7 +804,7 @@ assert('Mrbmacs::ApplicationCocoa searches incrementally forward') do
   frame = Mrbmacs::FrameCocoa.new(
     Mrbmacs::TabCocoa.new(Mrbmacs::PaneCocoa.new(view, buffer)), echo_win
   )
-  app = Mrbmacs::ApplicationCocoa.new(frame, buffer)
+  app = build_cocoa_application_for_test(frame, buffer)
 
   assert_true app.key_press('C-s')
   assert_true app.isearch_active?
@@ -837,7 +831,7 @@ assert('Mrbmacs::ApplicationCocoa searches backward and cancels') do
   frame = Mrbmacs::FrameCocoa.new(
     Mrbmacs::TabCocoa.new(Mrbmacs::PaneCocoa.new(view, buffer)), echo_win
   )
-  app = Mrbmacs::ApplicationCocoa.new(frame, buffer)
+  app = build_cocoa_application_for_test(frame, buffer)
 
   assert_true app.key_press('C-r')
   echo_win.text = 'alpha'
@@ -856,7 +850,7 @@ assert('Mrbmacs::ApplicationCocoa uses byte length for search text') do
   frame = Mrbmacs::FrameCocoa.new(
     Mrbmacs::TabCocoa.new(Mrbmacs::PaneCocoa.new(view, buffer)), echo_win
   )
-  app = Mrbmacs::ApplicationCocoa.new(frame, buffer)
+  app = build_cocoa_application_for_test(frame, buffer)
 
   app.isearch_forward
   echo_win.text = 'あ'
@@ -872,7 +866,7 @@ assert('Mrbmacs::ApplicationCocoa replaces all text from point') do
   frame = Mrbmacs::FrameCocoa.new(
     Mrbmacs::TabCocoa.new(Mrbmacs::PaneCocoa.new(view, buffer)), echo_win
   )
-  app = Mrbmacs::ApplicationCocoa.new(frame, buffer)
+  app = build_cocoa_application_for_test(frame, buffer)
 
   app.start_replace(false, 'one', '1')
 
@@ -890,7 +884,7 @@ assert('Mrbmacs::ApplicationCocoa starts query replace with M-%') do
     Mrbmacs::TabCocoa.new(Mrbmacs::PaneCocoa.new(view, buffer)), echo_win
   )
   frame.input_events = [[:enter, 'one'], [:enter, '1']]
-  app = Mrbmacs::ApplicationCocoa.new(frame, buffer)
+  app = build_cocoa_application_for_test(frame, buffer)
 
   assert_true app.key_press('M-%')
 
@@ -907,7 +901,7 @@ assert('Mrbmacs::ApplicationCocoa skips and replaces query matches') do
   frame = Mrbmacs::FrameCocoa.new(
     Mrbmacs::TabCocoa.new(Mrbmacs::PaneCocoa.new(view, buffer)), echo_win
   )
-  app = Mrbmacs::ApplicationCocoa.new(frame, buffer)
+  app = build_cocoa_application_for_test(frame, buffer)
 
   app.start_replace(true, 'one', '1')
   assert_true app.query_replace_active?
@@ -929,7 +923,7 @@ assert('Mrbmacs::ApplicationCocoa replaces remaining query matches') do
   frame = Mrbmacs::FrameCocoa.new(
     Mrbmacs::TabCocoa.new(Mrbmacs::PaneCocoa.new(view, buffer)), echo_win
   )
-  app = Mrbmacs::ApplicationCocoa.new(frame, buffer)
+  app = build_cocoa_application_for_test(frame, buffer)
 
   app.start_replace(true, 'one', '1')
   assert_true app.echo_key_press('!')
@@ -947,7 +941,7 @@ assert('Mrbmacs::ApplicationCocoa cancels query replace') do
   frame = Mrbmacs::FrameCocoa.new(
     Mrbmacs::TabCocoa.new(Mrbmacs::PaneCocoa.new(view, buffer)), echo_win
   )
-  app = Mrbmacs::ApplicationCocoa.new(frame, buffer)
+  app = build_cocoa_application_for_test(frame, buffer)
 
   app.start_replace(true, 'one', '1')
   assert_true app.echo_key_press('C-g')
@@ -965,7 +959,7 @@ assert('Mrbmacs::ApplicationCocoa rejects an empty replacement search') do
   frame = Mrbmacs::FrameCocoa.new(
     Mrbmacs::TabCocoa.new(Mrbmacs::PaneCocoa.new(view, buffer)), echo_win
   )
-  app = Mrbmacs::ApplicationCocoa.new(frame, buffer)
+  app = build_cocoa_application_for_test(frame, buffer)
 
   app.start_replace(false, '', 'x')
 
@@ -981,7 +975,7 @@ assert('Mrbmacs::ApplicationCocoa uses byte lengths for replacement') do
   frame = Mrbmacs::FrameCocoa.new(
     Mrbmacs::TabCocoa.new(Mrbmacs::PaneCocoa.new(view, buffer)), echo_win
   )
-  app = Mrbmacs::ApplicationCocoa.new(frame, buffer)
+  app = build_cocoa_application_for_test(frame, buffer)
 
   app.start_replace(false, 'a', 'あ')
 
@@ -995,7 +989,7 @@ assert('Mrbmacs::ApplicationCocoa handles a Scintilla key command') do
   frame = Mrbmacs::FrameCocoa.new(
     Mrbmacs::TabCocoa.new(Mrbmacs::PaneCocoa.new(view, buffer))
   )
-  app = Mrbmacs::ApplicationCocoa.new(frame, buffer)
+  app = build_cocoa_application_for_test(frame, buffer)
 
   assert_true app.key_press('C-f')
   assert_equal [Scintilla::SCI_CHARRIGHT], view.messages
@@ -1008,7 +1002,7 @@ assert('Mrbmacs::ApplicationCocoa handles a prefix Scintilla command') do
   frame = Mrbmacs::FrameCocoa.new(
     Mrbmacs::TabCocoa.new(Mrbmacs::PaneCocoa.new(view, buffer))
   )
-  app = Mrbmacs::ApplicationCocoa.new(frame, buffer)
+  app = build_cocoa_application_for_test(frame, buffer)
 
   assert_true app.key_press('C-x')
   assert_true app.key_press('u')
@@ -1021,7 +1015,7 @@ assert('Mrbmacs::ApplicationCocoa treats Escape as a Meta prefix') do
   frame = Mrbmacs::FrameCocoa.new(
     Mrbmacs::TabCocoa.new(Mrbmacs::PaneCocoa.new(view, buffer))
   )
-  app = Mrbmacs::ApplicationCocoa.new(frame, buffer)
+  app = build_cocoa_application_for_test(frame, buffer)
 
   assert_true app.key_press('Escape')
   assert_true app.key_press('f')
@@ -1034,7 +1028,7 @@ assert('Mrbmacs::ApplicationCocoa clears an undefined Escape prefix') do
   frame = Mrbmacs::FrameCocoa.new(
     Mrbmacs::TabCocoa.new(Mrbmacs::PaneCocoa.new(view, buffer))
   )
-  app = Mrbmacs::ApplicationCocoa.new(frame, buffer)
+  app = build_cocoa_application_for_test(frame, buffer)
 
   assert_true app.key_press('Escape')
   assert_false app.key_press('z')
@@ -1049,7 +1043,7 @@ assert('Mrbmacs::ApplicationCocoa leaves text input to Cocoa') do
   frame = Mrbmacs::FrameCocoa.new(
     Mrbmacs::TabCocoa.new(Mrbmacs::PaneCocoa.new(view, buffer))
   )
-  app = Mrbmacs::ApplicationCocoa.new(frame, buffer)
+  app = build_cocoa_application_for_test(frame, buffer)
 
   assert_false app.key_press('a')
   assert_equal [], view.messages
@@ -1062,7 +1056,7 @@ assert('Mrbmacs::ApplicationCocoa runs a shared Ruby editor command') do
   frame = Mrbmacs::FrameCocoa.new(
     Mrbmacs::TabCocoa.new(Mrbmacs::PaneCocoa.new(view, buffer))
   )
-  app = Mrbmacs::ApplicationCocoa.new(frame, buffer)
+  app = build_cocoa_application_for_test(frame, buffer)
 
   assert_true app.key_press('C-a')
   assert_equal [Scintilla::SCI_HOME], view.messages
@@ -1074,7 +1068,7 @@ assert('Mrbmacs::ApplicationCocoa handles mark, copy, and yank commands') do
   frame = Mrbmacs::FrameCocoa.new(
     Mrbmacs::TabCocoa.new(Mrbmacs::PaneCocoa.new(view, buffer))
   )
-  app = Mrbmacs::ApplicationCocoa.new(frame, buffer)
+  app = build_cocoa_application_for_test(frame, buffer)
 
   view.current_pos = 2
   assert_true app.key_press('C- ')
@@ -1097,7 +1091,7 @@ assert('Mrbmacs::ApplicationCocoa handles newline') do
   frame = Mrbmacs::FrameCocoa.new(
     Mrbmacs::TabCocoa.new(Mrbmacs::PaneCocoa.new(view, buffer))
   )
-  app = Mrbmacs::ApplicationCocoa.new(frame, buffer)
+  app = build_cocoa_application_for_test(frame, buffer)
 
   assert_true app.key_press('Enter')
   assert_equal [:new_line], view.messages
@@ -1112,7 +1106,7 @@ assert('Mrbmacs::ApplicationCocoa saves through a shared Ruby command') do
   frame = Mrbmacs::FrameCocoa.new(
     Mrbmacs::TabCocoa.new(Mrbmacs::PaneCocoa.new(view, buffer))
   )
-  app = Mrbmacs::ApplicationCocoa.new(frame, buffer)
+  app = build_cocoa_application_for_test(frame, buffer)
 
   begin
     assert_true app.key_press('C-x')
@@ -1130,7 +1124,7 @@ assert('Mrbmacs::ApplicationCocoa exits through its Cocoa frame') do
   frame = CocoaFrameForExitTest.new(
     Mrbmacs::TabCocoa.new(Mrbmacs::PaneCocoa.new(view, buffer))
   )
-  app = Mrbmacs::ApplicationCocoa.new(frame, buffer)
+  app = build_cocoa_application_for_test(frame, buffer)
 
   assert_true app.key_press('C-x')
   assert_true app.key_press('C-c')
@@ -1215,7 +1209,7 @@ assert('Cocoa application splits the active pane with the same buffer') do
   pane = Mrbmacs::PaneCocoa.new(Scintilla::ScintillaCocoa.new, buffer)
   tab = Mrbmacs::TabCocoa.new(pane)
   frame = Mrbmacs::FrameCocoa.new(tab)
-  app = Mrbmacs::ApplicationCocoa.new(frame, buffer)
+  app = build_cocoa_application_for_test(frame, buffer)
 
   assert_true app.key_press('C-x')
   assert_true app.key_press('2')
@@ -1236,7 +1230,7 @@ assert('Cocoa application rejects a pane that is too small to split') do
   frame.define_singleton_method(:pane_can_split?) do |_pane, _direction, _size|
     false
   end
-  app = Mrbmacs::ApplicationCocoa.new(frame, buffer)
+  app = build_cocoa_application_for_test(frame, buffer)
 
   app.split_window(false)
 
