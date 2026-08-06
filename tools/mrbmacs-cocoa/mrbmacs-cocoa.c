@@ -605,9 +605,7 @@ main(int argc, char **argv)
     mrb_value buffer;
     mrb_value pane;
     mrb_value tab;
-    mrb_value native_handle;
     mrb_value echo_native_handle;
-    NSView *view;
     NSView *echo_view;
     NSView *layout_view;
     NSView *pane_view;
@@ -773,10 +771,6 @@ main(int argc, char **argv)
       mrbmacs_mrb, mrbmacs_frame, "view", 0
     );
 
-    native_handle = mrb_funcall(
-      mrbmacs_mrb, mrbmacs_view, "native_handle", 0
-    );
-    view = (NSView *)(intptr_t)mrb_integer(native_handle);
     echo_native_handle = mrb_funcall(
       mrbmacs_mrb, mrbmacs_echo_view, "native_handle", 0
     );
@@ -828,7 +822,6 @@ main(int argc, char **argv)
     );
     [window center];
     [window makeKeyAndOrderFront:nil];
-    [window makeFirstResponder:view];
 
     mrb_funcall(
       mrbmacs_mrb, mrbmacs_app, "load_initial_file", 1,
@@ -841,6 +834,12 @@ main(int argc, char **argv)
     }
 
     [application activateIgnoringOtherApps:YES];
+    mrb_funcall(mrbmacs_mrb, mrbmacs_view, "sci_grab_focus", 0);
+    if (mrbmacs_mrb->exc != NULL) {
+      print_mruby_error(mrbmacs_mrb);
+      mrb_close(mrbmacs_mrb);
+      return EXIT_FAILURE;
+    }
     [application run];
 
     [NSEvent removeMonitor:key_event_monitor];
