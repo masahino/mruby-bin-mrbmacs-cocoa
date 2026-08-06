@@ -64,6 +64,7 @@ class CocoaViewForLayoutTest
   attr_reader :search_lengths, :selections
   attr_reader :replacement_lengths, :undo_actions
   attr_reader :caret_colors, :caret_styles
+  attr_reader :command_keys
   attr_reader :margin_messages
   attr_reader :theme_messages
   attr_reader :vertical_scrollbar
@@ -77,6 +78,7 @@ class CocoaViewForLayoutTest
     @messages = []
     @caret_colors = []
     @caret_styles = []
+    @command_keys = []
     @margin_messages = []
     @horizontal_scrollbar = true
     @vertical_scrollbar = true
@@ -167,6 +169,10 @@ class CocoaViewForLayoutTest
 
   def sci_set_caret_fore(color)
     @caret_colors << color
+  end
+
+  def sci_assign_cmdkey(key, command)
+    @command_keys << [key, command]
   end
 
   def sci_set_target_start(position)
@@ -547,6 +553,28 @@ assert('Mrbmacs::ApplicationCocoa owns its Cocoa frame and initial buffer') do
   assert_kind_of Mrbmacs::SolarizedDarkTheme, app.theme
   assert_true pane.view.theme_messages.include?(
     [:style_fore, Scintilla::STYLE_DEFAULT, app.theme.foreground_color]
+  )
+end
+
+assert('Mrbmacs::ApplicationCocoa applies the shared echo-area keymap') do
+  buffer = Mrbmacs::Buffer.new('*scratch*')
+  pane = Mrbmacs::PaneCocoa.new(CocoaViewForLayoutTest.new, buffer)
+  echo_win = CocoaViewForLayoutTest.new
+  frame = Mrbmacs::FrameCocoa.new(Mrbmacs::TabCocoa.new(pane), echo_win)
+  Mrbmacs::ApplicationCocoa.new(frame, buffer)
+  ctrl = Scintilla::SCMOD_META << 16
+
+  assert_true echo_win.command_keys.include?(
+    [ctrl + 'a'.ord, Scintilla::SCI_HOME]
+  )
+  assert_true echo_win.command_keys.include?(
+    [ctrl + 'e'.ord, Scintilla::SCI_LINEEND]
+  )
+  assert_true echo_win.command_keys.include?(
+    [ctrl + 'k'.ord, Scintilla::SCI_DELLINERIGHT]
+  )
+  assert_true echo_win.command_keys.include?(
+    [ctrl + 'y'.ord, Scintilla::SCI_PASTE]
   )
 end
 

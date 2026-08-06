@@ -533,6 +533,20 @@ module Mrbmacs
 
   # Native macOS mrbmacs application.
   class ApplicationCocoa < Application
+    def set_keybind(win, key, command)
+      keydef = 0
+      key_parts = key.split('-')
+      if key_parts.length == 2
+        modifier, key_char = key_parts
+        keydef += Scintilla::SCMOD_META << 16 if modifier == 'C'
+        keydef += Scintilla::SCMOD_ALT << 16 if modifier == 'M'
+        keydef += key_char == 'DEL' ? Scintilla::SCK_DELETE : key_char.ord
+      else
+        keydef = key.ord
+      end
+      win.sci_assign_cmdkey(keydef, command)
+    end
+
     def initialize(frame, buffer)
       init_instance_variables
       @logger = init_logfile
@@ -540,6 +554,8 @@ module Mrbmacs
       @current_buffer = buffer
       @buffer_list = [buffer]
       @keymap = ViewKeyMap.new
+      @echo_keymap = EchoWinKeyMap.new
+      apply_keymap(@frame.echo_win, @echo_keymap) unless @frame.echo_win.nil?
       @prefix_key = ''
       @isearch_active = false
       @isearch_backward = false
