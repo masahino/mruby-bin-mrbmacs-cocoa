@@ -32,6 +32,7 @@ The initial implementation:
 - uses Menlo 14 by default and opens the native font panel with
   `M-x select-font`;
 - displays line numbers in each editor pane;
+- displays theme-aware block carets in editor panes and the echo area;
 - provides a standard application menu and Quit command.
 
 Native tabs and the remaining

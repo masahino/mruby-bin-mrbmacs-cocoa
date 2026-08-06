@@ -58,8 +58,17 @@ module Mrbmacs
       @parent = nil
       @modeline_text = ''
       @view.notification_callback = ScintillaNotificationBridge.new(self)
+      initialize_caret
       initialize_line_number_margin
       self.buffer = buffer unless buffer.nil?
+    end
+
+    def initialize_caret
+      @view.sci_set_caret_style(
+        Scintilla::CARETSTYLE_BLOCK_AFTER |
+        Scintilla::CARETSTYLE_OVERSTRIKE_BLOCK |
+        Scintilla::CARETSTYLE_BLOCK
+      )
     end
 
     def initialize_line_number_margin
@@ -129,6 +138,7 @@ module Mrbmacs
     def apply_theme(theme)
       @theme = theme
       apply_theme_base(theme)
+      @view.sci_set_caret_fore(theme.foreground_color)
       @view.sci_set_fold_margin_colour(true, theme.background_color)
       @view.sci_set_fold_margin_hicolour(true, theme.foreground_color)
       (25..31).each do |marker|
@@ -263,6 +273,11 @@ module Mrbmacs
         @echo_win.notification_callback = EchoNotificationBridge.new
         @echo_win.sci_set_hscrollbar(false)
         @echo_win.sci_set_vscrollbar(false)
+        @echo_win.sci_set_caret_style(
+          Scintilla::CARETSTYLE_BLOCK_AFTER |
+          Scintilla::CARETSTYLE_OVERSTRIKE_BLOCK |
+          Scintilla::CARETSTYLE_BLOCK
+        )
         (0..2).each { |margin| @echo_win.sci_set_margin_widthn(margin, 0) }
         @echo_win.sci_set_margin_typen(3, 4)
       end
@@ -319,6 +334,7 @@ module Mrbmacs
         Scintilla::STYLE_DEFAULT, theme.background_color
       )
       @echo_win.sci_style_clear_all
+      @echo_win.sci_set_caret_fore(theme.foreground_color)
     end
 
     def set_font(name, size)
