@@ -439,8 +439,8 @@ module Mrbmacs
       input
     ensure
       @echo_win.sci_autoc_cancel unless @echo_win.nil?
-      @echo_win.sci_clear_all unless @echo_win.nil?
       echo_set_prompt('') unless @echo_win.nil?
+      @echo_win.sci_clear_all unless @echo_win.nil?
       view.sci_grab_focus
     end
 
