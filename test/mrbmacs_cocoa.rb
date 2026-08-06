@@ -76,7 +76,8 @@ class CocoaViewForLayoutTest
   attr_accessor :notification_callback
   attr_accessor :current_pos
   attr_accessor :text
-  attr_reader :added_documents, :autocomplete_lists, :copied_ranges
+  attr_reader :added_documents, :autocomplete_choose_single,
+              :autocomplete_lists, :copied_ranges
   attr_reader :set_documents
   attr_reader :horizontal_scrollbar, :messages, :save_point
   attr_reader :search_lengths, :selections
@@ -101,6 +102,7 @@ class CocoaViewForLayoutTest
     @horizontal_scrollbar = true
     @vertical_scrollbar = true
     @autocomplete_active = false
+    @autocomplete_choose_single = nil
     @autocomplete_lists = []
     @text = ''
     @save_point = false
@@ -455,6 +457,10 @@ class CocoaViewForLayoutTest
     @autocomplete_active
   end
 
+  def sci_autoc_set_choose_single(value)
+    @autocomplete_choose_single = value
+  end
+
   def sci_autoc_cancel
     @autocomplete_active = false
   end
@@ -591,6 +597,7 @@ assert('Mrbmacs::ApplicationCocoa applies the shared echo-area keymap') do
   build_cocoa_application_for_test(frame, buffer)
   ctrl = Scintilla::SCMOD_META << 16
 
+  assert_equal 1, echo_win.autocomplete_choose_single
   assert_true echo_win.command_keys.include?(
     [ctrl + 'a'.ord, Scintilla::SCI_HOME]
   )
