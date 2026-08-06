@@ -19,6 +19,7 @@ module Mrbmacs
         @echo_win.notification_callback = EchoNotificationBridge.new
         @echo_win.sci_set_hscrollbar(false)
         @echo_win.sci_set_vscrollbar(false)
+        @echo_win.sci_autoc_set_choose_single(1)
         @echo_win.sci_set_caret_style(
           Scintilla::CARETSTYLE_BLOCK_AFTER |
           Scintilla::CARETSTYLE_OVERSTRIKE_BLOCK |
@@ -186,6 +187,7 @@ module Mrbmacs
     ensure
       @echo_win.sci_autoc_cancel unless @echo_win.nil?
       echo_set_prompt('') unless @echo_win.nil?
+      @echo_win.sci_add_text(1, ' ') unless @echo_win.nil?
       @echo_win.sci_clear_all unless @echo_win.nil?
       view.sci_grab_focus
     end
