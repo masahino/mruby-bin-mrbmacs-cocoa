@@ -58,7 +58,19 @@ module Mrbmacs
       @parent = nil
       @modeline_text = ''
       @view.notification_callback = ScintillaNotificationBridge.new(self)
+      initialize_line_number_margin
       self.buffer = buffer unless buffer.nil?
+    end
+
+    def initialize_line_number_margin
+      @view.sci_set_margin_widthn(
+        MARGIN_LINE_NUMBER,
+        @view.sci_text_width(Scintilla::STYLE_LINENUMBER, '_99999')
+      )
+      @view.sci_set_margin_maskn(
+        MARGIN_LINE_NUMBER, MARKERMASK_LINE_NUMBER
+      )
+      @view.sci_set_marginsensitiven(MARGIN_LINE_NUMBER, 1)
     end
 
     def buffer=(buffer)
@@ -123,6 +135,7 @@ module Mrbmacs
         @view.sci_marker_set_fore(marker, theme.foreground_color)
         @view.sci_marker_set_back(marker, theme.background_color)
       end
+      initialize_line_number_margin
     end
 
     def apply_modeline_theme(active)

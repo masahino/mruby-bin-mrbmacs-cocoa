@@ -63,6 +63,7 @@ class CocoaViewForLayoutTest
   attr_reader :horizontal_scrollbar, :messages, :save_point
   attr_reader :search_lengths, :selections
   attr_reader :replacement_lengths, :undo_actions
+  attr_reader :margin_messages
   attr_reader :theme_messages
   attr_reader :vertical_scrollbar
 
@@ -73,6 +74,7 @@ class CocoaViewForLayoutTest
     @current_pos = 0
     @set_documents = []
     @messages = []
+    @margin_messages = []
     @horizontal_scrollbar = true
     @vertical_scrollbar = true
     @autocomplete_active = false
@@ -387,7 +389,7 @@ class CocoaViewForLayoutTest
   end
 
   def sci_set_margin_typen(margin, type)
-    @messages << [:margin_type, margin, type]
+    @margin_messages << [:margin_type, margin, type]
   end
 
   def sci_text_width(_style, text)
@@ -395,11 +397,19 @@ class CocoaViewForLayoutTest
   end
 
   def sci_set_margin_widthn(margin, width)
-    @messages << [:margin_width, margin, width]
+    @margin_messages << [:margin_width, margin, width]
+  end
+
+  def sci_set_margin_maskn(margin, mask)
+    @margin_messages << [:margin_mask, margin, mask]
+  end
+
+  def sci_set_marginsensitiven(margin, sensitive)
+    @margin_messages << [:margin_sensitive, margin, sensitive]
   end
 
   def sci_margin_set_text(line, text)
-    @messages << [:margin_text, line, text]
+    @margin_messages << [:margin_text, line, text]
   end
 
   def sci_grab_focus
@@ -542,6 +552,33 @@ assert('Mrbmacs::PaneCocoa applies active native mode line colors') do
   pane.apply_modeline_theme(true)
 
   assert_equal [theme.font_color[:color_mode_line][0, 2]], calls
+end
+
+assert('Mrbmacs::PaneCocoa configures its line number margin') do
+  view = CocoaViewForLayoutTest.new
+  pane = Mrbmacs::PaneCocoa.new(view)
+
+  assert_true view.margin_messages.include?(
+    [:margin_width, Mrbmacs::EditWindow::MARGIN_LINE_NUMBER, 6]
+  )
+  assert_true view.margin_messages.include?(
+    [
+      :margin_mask,
+      Mrbmacs::EditWindow::MARGIN_LINE_NUMBER,
+      Mrbmacs::MARKERMASK_LINE_NUMBER
+    ]
+  )
+  assert_true view.margin_messages.include?(
+    [:margin_sensitive, Mrbmacs::EditWindow::MARGIN_LINE_NUMBER, 1]
+  )
+
+  margin_width_count = view.margin_messages.count do |message|
+    message == [:margin_width, Mrbmacs::EditWindow::MARGIN_LINE_NUMBER, 6]
+  end
+  pane.apply_theme(Mrbmacs::SolarizedDarkTheme.new)
+  assert_equal margin_width_count + 1, view.margin_messages.count { |message|
+    message == [:margin_width, Mrbmacs::EditWindow::MARGIN_LINE_NUMBER, 6]
+  }
 end
 
 assert('Mrbmacs::FrameCocoa applies a font to every pane and echo area') do
@@ -1162,7 +1199,7 @@ assert('Mrbmacs::FrameCocoa displays messages in its shared echo area') do
   assert_false echo_win.horizontal_scrollbar
   assert_false echo_win.vertical_scrollbar
   (0..2).each do |margin|
-    assert_true echo_win.messages.include?([:margin_width, margin, 0])
+    assert_true echo_win.margin_messages.include?([:margin_width, margin, 0])
   end
   assert_equal 'New file', echo_win.text
   assert_true echo_win.messages.include?(:document_end)
@@ -1190,8 +1227,8 @@ assert('Mrbmacs::FrameCocoa reads input through its shared echo area') do
 
   assert_equal '/tmp/test.rb', frame.echo_gets('Find file: ', '/tmp/')
   assert_equal '', echo_win.text
-  assert_true echo_win.messages.include?([:margin_text, 0, 'Find file: '])
-  assert_true echo_win.messages.include?([:margin_text, 0, ''])
+  assert_true echo_win.margin_messages.include?([:margin_text, 0, 'Find file: '])
+  assert_true echo_win.margin_messages.include?([:margin_text, 0, ''])
   assert_true view.messages.include?(:grab_focus)
 end
 
@@ -1225,7 +1262,7 @@ assert('Mrbmacs::FrameCocoa selects a buffer through its echo area') do
   result = frame.select_buffer('*scratch*', ['*scratch*', 'notes.rb'])
 
   assert_equal 'notes.rb', result
-  assert_true echo_win.messages.include?(
+  assert_true echo_win.margin_messages.include?(
     [:margin_text, 0, 'Switch to buffer: (default *scratch*) ']
   )
   assert_true view.messages.include?(:grab_focus)
@@ -1263,7 +1300,7 @@ assert('Mrbmacs::FrameCocoa confirms with one modal key') do
   assert_false frame.y_or_n('Buffer modified; kill anyway? (y or n) ')
   assert_equal '', echo_win.text
   assert_true view.messages.include?(:grab_focus)
-  assert_true echo_win.messages.include?([:margin_text, 0, ''])
+  assert_true echo_win.margin_messages.include?([:margin_text, 0, ''])
 end
 
 assert('Mrbmacs::TabCocoa is a layout and not a buffer') do
