@@ -19,7 +19,8 @@ The initial implementation:
 - executes shared Ruby editor commands, including basic movement and saving;
 - opens a file passed on the command line;
 - opens existing and new files with `C-x C-f`;
-- provides an echo area with minibuffer input and completion;
+- provides an echo area with minibuffer input, Emacs-style editing keys, and
+  completion;
 - executes commands by name with `M-x`;
 - switches buffers with `C-x b` and kills buffers with `C-x k`;
 - searches incrementally through the echo area with `C-s` and `C-r`;
