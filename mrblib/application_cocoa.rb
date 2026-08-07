@@ -357,9 +357,11 @@ module Mrbmacs
         apply_theme_to_mode(active_pane.buffer.mode, new_pane, @theme)
       end
 
-      @frame.active_tab.split(active_pane, new_pane, orientation)
+      split = @frame.active_tab.split(active_pane, new_pane, orientation)
       unless @frame.native_handle.nil?
-        @frame.split_native_pane(active_pane, new_pane, orientation)
+        split.native_handle = @frame.split_native_pane(
+          active_pane, new_pane, orientation
+        )
       end
       @frame.modeline(self, active_pane)
       @frame.modeline(self, new_pane)

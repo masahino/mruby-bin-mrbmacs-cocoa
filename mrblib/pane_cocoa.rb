@@ -95,6 +95,16 @@ module Mrbmacs
       columns > 0 ? columns : 1
     end
 
+    def minimum_native_width
+      @view.sci_text_width(Scintilla::STYLE_DEFAULT, '0' * 10)
+    end
+
+    def minimum_native_height
+      modeline_height = 0
+      modeline_height = native_modeline_height unless @modeline_native_handle.nil?
+      @view.sci_text_height(0) * 3 + modeline_height
+    end
+
     # EditWindow-compatible access used by shared editor commands.
     def sci
       @view

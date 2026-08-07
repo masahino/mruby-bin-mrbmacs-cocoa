@@ -137,6 +137,22 @@ module Mrbmacs
       switch_window(active_pane)
     end
 
+    def enlarge_window(pane, lines)
+      resize_native_pane(
+        pane,
+        :vertical,
+        pane.view.sci_text_height(0) * lines
+      )
+    end
+
+    def enlarge_window_horizontally(pane, columns)
+      resize_native_pane(
+        pane,
+        :horizontal,
+        pane.view.sci_text_width(Scintilla::STYLE_DEFAULT, '0') * columns
+      )
+    end
+
     def modeline(app, pane = active_pane)
       pane.modeline_text = get_mode_str(app)
       pane.apply_modeline_theme(pane.equal?(active_pane))
@@ -144,6 +160,39 @@ module Mrbmacs
 
     def modeline_refresh(app)
       modeline(app)
+    end
+
+    def resize_native_pane(pane, orientation, delta)
+      branch = pane
+      split = branch.parent
+      until split.nil? || split.orientation == orientation
+        branch = split
+        split = split.parent
+      end
+      return false if split.nil? || split.native_handle.nil?
+
+      move_native_divider(
+        split,
+        split.first.equal?(branch),
+        delta,
+        minimum_native_extent(split.first, orientation),
+        minimum_native_extent(split.second, orientation)
+      )
+    end
+
+    def minimum_native_extent(node, orientation)
+      if node.is_a?(PaneCocoa)
+        return orientation == :horizontal ? node.minimum_native_width :
+                                            node.minimum_native_height
+      end
+
+      first_extent = minimum_native_extent(node.first, orientation)
+      second_extent = minimum_native_extent(node.second, orientation)
+      if node.orientation == orientation
+        first_extent + native_divider_thickness(node) + second_extent
+      else
+        [first_extent, second_extent].max
+      end
     end
 
     def echo_puts(text)

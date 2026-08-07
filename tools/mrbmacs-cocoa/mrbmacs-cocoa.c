@@ -209,6 +209,21 @@ mrbmacs_pane_native_client_width(mrb_state *mrb, mrb_value self)
   return mrb_float_value(mrb, NSWidth(view.bounds));
 }
 
+static mrb_value
+mrbmacs_pane_native_modeline_height(mrb_state *mrb, mrb_value self)
+{
+  mrb_value native_handle = mrb_iv_get(
+    mrb, self, mrb_intern_lit(mrb, "@modeline_native_handle")
+  );
+  MrbmacsModelineView *modeline;
+
+  if (mrb_nil_p(native_handle)) {
+    return mrb_fixnum_value(0);
+  }
+  modeline = (MrbmacsModelineView *)(intptr_t)mrb_integer(native_handle);
+  return mrb_fixnum_value((mrb_int)ceil(NSHeight(modeline.frame)));
+}
+
 static NSColor *
 mrbmacs_color_from_scintilla(mrb_int color)
 {
@@ -509,7 +524,77 @@ mrbmacs_frame_split_native_pane(mrb_state *mrb, mrb_value self)
   [split adjustSubviews];
   [split setPosition:(side_by_side ? NSWidth(split.bounds) : NSHeight(split.bounds)) / 2.0
       ofDividerAtIndex:0];
-  return mrb_nil_value();
+  return mrb_int_value(mrb, (mrb_int)(intptr_t)split);
+}
+
+static NSSplitView *
+mrbmacs_split_native_view(mrb_state *mrb, mrb_value split_value)
+{
+  mrb_value native_handle = mrb_iv_get(
+    mrb, split_value, mrb_intern_lit(mrb, "@native_handle")
+  );
+
+  if (mrb_nil_p(native_handle)) {
+    return nil;
+  }
+  return (NSSplitView *)(intptr_t)mrb_integer(native_handle);
+}
+
+static mrb_value
+mrbmacs_frame_native_divider_thickness(mrb_state *mrb, mrb_value self)
+{
+  mrb_value split_value;
+  NSSplitView *split;
+
+  (void)self;
+  mrb_get_args(mrb, "o", &split_value);
+  split = mrbmacs_split_native_view(mrb, split_value);
+  if (split == nil) {
+    return mrb_fixnum_value(0);
+  }
+  return mrb_fixnum_value((mrb_int)ceil(split.dividerThickness));
+}
+
+static mrb_value
+mrbmacs_frame_move_native_divider(mrb_state *mrb, mrb_value self)
+{
+  mrb_value split_value;
+  mrb_bool active_in_first;
+  mrb_int delta;
+  mrb_int first_minimum;
+  mrb_int second_minimum;
+  NSSplitView *split;
+  NSView *first;
+  CGFloat extent;
+  CGFloat current_position;
+  CGFloat minimum_position;
+  CGFloat maximum_position;
+  CGFloat requested_position;
+
+  (void)self;
+  mrb_get_args(
+    mrb, "obiii", &split_value, &active_in_first, &delta,
+    &first_minimum, &second_minimum
+  );
+  split = mrbmacs_split_native_view(mrb, split_value);
+  if (split == nil || split.subviews.count != 2) {
+    return mrb_false_value();
+  }
+
+  first = split.subviews[0];
+  extent = split.isVertical ? NSWidth(split.bounds) : NSHeight(split.bounds);
+  current_position = split.isVertical ? NSWidth(first.frame) : NSHeight(first.frame);
+  minimum_position = (CGFloat)first_minimum;
+  maximum_position = extent - split.dividerThickness - (CGFloat)second_minimum;
+  if (maximum_position < minimum_position) {
+    return mrb_false_value();
+  }
+
+  requested_position = current_position + (active_in_first ? delta : -delta);
+  requested_position = MAX(minimum_position, requested_position);
+  requested_position = MIN(maximum_position, requested_position);
+  [split setPosition:requested_position ofDividerAtIndex:0];
+  return mrb_true_value();
 }
 
 static mrb_value
@@ -763,6 +848,10 @@ main(int argc, char **argv)
       mrbmacs_pane_native_client_width, MRB_ARGS_NONE()
     );
     mrb_define_method(
+      mrbmacs_mrb, pane_class, "native_modeline_height",
+      mrbmacs_pane_native_modeline_height, MRB_ARGS_NONE()
+    );
+    mrb_define_method(
       mrbmacs_mrb, pane_class, "update_native_modeline_theme",
       mrbmacs_pane_update_native_modeline_theme, MRB_ARGS_REQ(2)
     );
@@ -795,6 +884,14 @@ main(int argc, char **argv)
     mrb_define_method(
       mrbmacs_mrb, frame_class, "split_native_pane",
       mrbmacs_frame_split_native_pane, MRB_ARGS_REQ(3)
+    );
+    mrb_define_method(
+      mrbmacs_mrb, frame_class, "native_divider_thickness",
+      mrbmacs_frame_native_divider_thickness, MRB_ARGS_REQ(1)
+    );
+    mrb_define_method(
+      mrbmacs_mrb, frame_class, "move_native_divider",
+      mrbmacs_frame_move_native_divider, MRB_ARGS_REQ(5)
     );
     mrb_define_method(
       mrbmacs_mrb, frame_class, "pane_can_split?",

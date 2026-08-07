@@ -2,11 +2,12 @@ module Mrbmacs
   # A branch in a tab's pane layout tree.
   class SplitCocoa
     attr_reader :orientation
-    attr_accessor :first, :second, :parent
+    attr_accessor :first, :second, :parent, :native_handle
 
     def initialize(orientation, first, second)
       @orientation = orientation
       @parent = nil
+      @native_handle = nil
       self.first = first
       self.second = second
     end
