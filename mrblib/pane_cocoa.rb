@@ -17,6 +17,9 @@ module Mrbmacs
       @parent = nil
       @modeline_text = ''
       @view.notification_callback = ScintillaNotificationBridge.new(self)
+      @view.sci_set_mod_event_mask(
+        Scintilla::SC_MOD_INSERTTEXT | Scintilla::SC_MOD_DELETETEXT
+      )
       initialize_caret
       initialize_line_number_margin
       self.buffer = buffer unless buffer.nil?
@@ -58,6 +61,14 @@ module Mrbmacs
     # Shared recenter logic uses pixel height for GUI edit windows.
     def height
       @view.sci_text_height(0) * @view.sci_lines_on_screen
+    end
+
+    def width
+      char_width = @view.sci_text_width(Scintilla::STYLE_DEFAULT, '0')
+      return 1 if char_width <= 0
+
+      columns = (native_client_width / char_width).to_i
+      columns > 0 ? columns : 1
     end
 
     # EditWindow-compatible access used by shared editor commands.

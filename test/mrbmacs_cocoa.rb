@@ -17,6 +17,24 @@ class CocoaApplicationForTest < Mrbmacs::ApplicationCocoa
   end
 end
 
+class CocoaIOApplicationForTest < Mrbmacs::ApplicationCocoa
+  attr_reader :watched_io, :unwatched_io
+
+  def watch_io_read_event(io)
+    @watched_io = io
+  end
+
+  def unwatch_io_read_event(io)
+    @unwatched_io = io
+  end
+end
+
+class CocoaPaneWidthForTest < Mrbmacs::PaneCocoa
+  def native_client_width
+    800
+  end
+end
+
 class CocoaModelineApplicationForTest
   def modeline_str
     '(utf-8-LF):-- *scratch* (1,1)    ()    [Fundamental]    []'
@@ -85,8 +103,10 @@ class CocoaViewForLayoutTest
   attr_reader :caret_colors, :caret_styles
   attr_reader :command_keys
   attr_reader :margin_messages
+  attr_reader :mod_event_masks
   attr_reader :theme_messages
   attr_reader :vertical_scrollbar
+  attr_reader :annotations
 
   def initialize(docpointer = 100)
     @docpointer = docpointer
@@ -99,6 +119,7 @@ class CocoaViewForLayoutTest
     @caret_styles = []
     @command_keys = []
     @margin_messages = []
+    @mod_event_masks = []
     @horizontal_scrollbar = true
     @vertical_scrollbar = true
     @autocomplete_active = false
@@ -115,6 +136,7 @@ class CocoaViewForLayoutTest
     @target_end = 0
     @theme_messages = []
     @undo_actions = []
+    @annotations = []
   end
 
   def sci_get_docpointer
@@ -214,15 +236,17 @@ class CocoaViewForLayoutTest
   def sci_search_in_target(length, search_text)
     @search_lengths << length
     if @target_start <= @target_end
-      offset = @text[@target_start...@target_end].index(search_text)
-      return -1 if offset.nil?
+      target = @text.byteslice(@target_start, @target_end - @target_start)
+      char_offset = target.index(search_text)
+      return -1 if char_offset.nil?
 
-      found = @target_start + offset
+      found = @target_start + target[0...char_offset].bytesize
     else
-      offset = @text[@target_end...@target_start].rindex(search_text)
-      return -1 if offset.nil?
+      target = @text.byteslice(@target_end, @target_start - @target_end)
+      char_offset = target.rindex(search_text)
+      return -1 if char_offset.nil?
 
-      found = @target_end + offset
+      found = @target_end + target[0...char_offset].bytesize
     end
     @target_start = found
     @target_end = found + search_text.bytesize
@@ -231,8 +255,8 @@ class CocoaViewForLayoutTest
 
   def sci_replace_target(length, replacement_text)
     @replacement_lengths << length
-    prefix = @text[0...@target_start]
-    suffix = @text[@target_end..]
+    prefix = @text.byteslice(0, @target_start)
+    suffix = @text.byteslice(@target_end, @text.bytesize - @target_end)
     @text = prefix + replacement_text + suffix
     @target_end = @target_start + replacement_text.bytesize
     @selection_start = @target_start
@@ -433,6 +457,14 @@ class CocoaViewForLayoutTest
     text.bytesize
   end
 
+  def sci_annotation_set_text(line, text)
+    @annotations << [:text, line, text]
+  end
+
+  def sci_annotation_set_style(line, style)
+    @annotations << [:style, line, style]
+  end
+
   def sci_set_margin_widthn(margin, width)
     @margin_messages << [:margin_width, margin, width]
   end
@@ -443,6 +475,10 @@ class CocoaViewForLayoutTest
 
   def sci_set_marginsensitiven(margin, sensitive)
     @margin_messages << [:margin_sensitive, margin, sensitive]
+  end
+
+  def sci_set_mod_event_mask(mask)
+    @mod_event_masks << mask
   end
 
   def sci_margin_set_text(line, text)
@@ -654,6 +690,39 @@ assert('Mrbmacs::PaneCocoa configures its line number margin') do
   }
 end
 
+assert('Mrbmacs::PaneCocoa limits modification events to text changes') do
+  view = CocoaViewForLayoutTest.new
+  Mrbmacs::PaneCocoa.new(view)
+
+  assert_equal [Scintilla::SC_MOD_INSERTTEXT | Scintilla::SC_MOD_DELETETEXT],
+               view.mod_event_masks
+end
+
+assert('Mrbmacs::PaneCocoa reports its native width in text columns') do
+  pane = CocoaPaneWidthForTest.new(CocoaViewForLayoutTest.new)
+
+  assert_equal 800, pane.width
+end
+
+assert('Mrbmacs::ApplicationCocoa registers native IO readability') do
+  app = CocoaIOApplicationForTest.allocate
+  app.init_instance_variables
+  io = Object.new
+  io.define_singleton_method(:close) {}
+  called = false
+
+  app.add_io_read_event(io) { |_application, readable_io|
+    called = readable_io.equal?(io)
+  }
+  app.process_io_read_event(io)
+
+  assert_same io, app.watched_io
+  assert_true called
+
+  app.del_io_read_event(io)
+  assert_same io, app.unwatched_io
+end
+
 assert('Mrbmacs::PaneCocoa configures a Scintilla block caret') do
   view = CocoaViewForLayoutTest.new
   Mrbmacs::PaneCocoa.new(view)
@@ -690,6 +759,24 @@ assert('Mrbmacs::FrameCocoa configures its echo-area caret') do
 
   assert_equal [style], echo_win.caret_styles
   assert_equal [theme.foreground_color], echo_win.caret_colors
+end
+
+assert('Mrbmacs::FrameCocoa provides the shared notification queue') do
+  pane = Mrbmacs::PaneCocoa.new(CocoaViewForLayoutTest.new)
+  frame = Mrbmacs::FrameCocoa.new(Mrbmacs::TabCocoa.new(pane))
+
+  assert_equal [], frame.sci_notifications
+end
+
+assert('Mrbmacs::FrameCocoa shows annotations in the active pane') do
+  view = CocoaViewForLayoutTest.new
+  pane = Mrbmacs::PaneCocoa.new(view)
+  frame = Mrbmacs::FrameCocoa.new(Mrbmacs::TabCocoa.new(pane))
+
+  frame.show_annotation(3, 1, 'Warning:message', 42)
+
+  assert_equal [[:text, 2, 'Warning:message'], [:style, 2, 42]],
+               view.annotations
 end
 
 assert('Mrbmacs::FrameCocoa applies a font to every pane and echo area') do

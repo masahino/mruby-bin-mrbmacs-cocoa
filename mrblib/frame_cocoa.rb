@@ -14,6 +14,7 @@ module Mrbmacs
       @native_handle = nil
       @layout_native_handle = nil
       @last_message = nil
+      @sci_notifications = []
       view.sci_set_hscrollbar(false)
       unless @echo_win.nil?
         @echo_win.notification_callback = EchoNotificationBridge.new
