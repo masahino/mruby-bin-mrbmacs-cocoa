@@ -62,6 +62,10 @@ module Mrbmacs
         MARGIN_VC,
         @view.sci_text_width(Scintilla::STYLE_LINENUMBER, '_')
       )
+      @view.sci_set_margin_widthn(
+        MARGIN_CHANGE_HISTORY,
+        @view.sci_text_width(Scintilla::STYLE_LINENUMBER, '_')
+      )
     end
 
     def buffer=(buffer)

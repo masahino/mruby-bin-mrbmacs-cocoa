@@ -763,6 +763,19 @@ assert('Mrbmacs::PaneCocoa configures the shared version control gutter') do
   )
 end
 
+assert('Mrbmacs::PaneCocoa recalculates the change history gutter width') do
+  view = CocoaViewForLayoutTest.new
+  view.text_width_scale = 8
+  Mrbmacs::PaneCocoa.new(view)
+  assert_equal(
+    [:margin_width, Mrbmacs::EditWindow::MARGIN_CHANGE_HISTORY, 8],
+    view.margin_messages.select { |message|
+      message[0] == :margin_width &&
+        message[1] == Mrbmacs::EditWindow::MARGIN_CHANGE_HISTORY
+    }.last
+  )
+end
+
 assert('Mrbmacs::PaneCocoa limits modification events to text changes') do
   view = CocoaViewForLayoutTest.new
   Mrbmacs::PaneCocoa.new(view)
