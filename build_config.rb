@@ -8,6 +8,10 @@ MRuby::Build.new do |conf|
   conf.gem github: 'mattn/mruby-iconv' do |gem|
     gem.skip_test = true
   end
+  conf.gem github: 'masahino/mruby-mrbmacs-lsp'
+  conf.gem github: 'masahino/mruby-lsp-client' do |gem|
+    gem.skip_test = true
+  end
 
   local_scintilla_cocoa =
     File.expand_path('../mruby-scintilla-cocoa', __dir__)

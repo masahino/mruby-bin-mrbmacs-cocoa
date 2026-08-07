@@ -38,6 +38,25 @@ module Mrbmacs
       initialize_native_frame
     end
 
+    def add_io_read_event(io, &block)
+      super
+      watch_io_read_event(io)
+    end
+
+    def del_io_read_event(io)
+      unwatch_io_read_event(io)
+      super
+    end
+
+    def process_io_read_event(io)
+      handler = @io_handler[io]
+      handler.call(self, io) unless handler.nil?
+    rescue StandardError => e
+      @logger.error e.to_s
+      @logger.error e.backtrace
+      @frame.echo_puts(e.to_s)
+    end
+
     def sci_notify(notification)
       $stderr.puts notification['code'] if $DEBUG
       call_sci_event(notification)

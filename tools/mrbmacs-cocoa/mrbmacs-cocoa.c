@@ -1,4 +1,5 @@
 #import <Cocoa/Cocoa.h>
+#import <dispatch/dispatch.h>
 
 #include <mruby.h>
 #include <mruby/array.h>
@@ -14,6 +15,7 @@ static NSWindow *mrbmacs_window;
 static NSView *mrbmacs_echo_native_view;
 static BOOL mrbmacs_confirmation_input;
 static id mrbmacs_font_target;
+static NSMutableDictionary *mrbmacs_io_sources;
 
 enum {
   MRBMACS_MODAL_RESPONSE_TAB = 1001,
@@ -65,6 +67,74 @@ enum {
 @end
 
 static void print_mruby_error(mrb_state *mrb);
+
+static mrb_value
+mrbmacs_application_watch_io_read_event(mrb_state *mrb, mrb_value self)
+{
+  mrb_value io;
+  mrb_value fileno;
+  NSNumber *key;
+  dispatch_source_t source;
+
+  (void)self;
+  mrb_get_args(mrb, "o", &io);
+  fileno = mrb_funcall(mrb, io, "fileno", 0);
+  key = [NSNumber numberWithLongLong:mrb_integer(fileno)];
+  if ([mrbmacs_io_sources objectForKey:key] != nil) {
+    return mrb_nil_value();
+  }
+
+  source = dispatch_source_create(
+    DISPATCH_SOURCE_TYPE_READ,
+    (uintptr_t)mrb_integer(fileno),
+    0,
+    dispatch_get_main_queue()
+  );
+  if (source == nil) {
+    return mrb_nil_value();
+  }
+  dispatch_source_set_event_handler(source, ^{
+    mrb_funcall(
+      mrbmacs_mrb, mrbmacs_app, "process_io_read_event", 1, io
+    );
+    if (mrbmacs_mrb->exc != NULL) {
+      print_mruby_error(mrbmacs_mrb);
+    }
+  });
+  [mrbmacs_io_sources setObject:source forKey:key];
+  dispatch_resume(source);
+  return mrb_nil_value();
+}
+
+static mrb_value
+mrbmacs_application_unwatch_io_read_event(mrb_state *mrb, mrb_value self)
+{
+  mrb_value io;
+  mrb_value fileno;
+  NSNumber *key;
+  dispatch_source_t source;
+
+  (void)self;
+  mrb_get_args(mrb, "o", &io);
+  fileno = mrb_funcall(mrb, io, "fileno", 0);
+  key = [NSNumber numberWithLongLong:mrb_integer(fileno)];
+  source = [mrbmacs_io_sources objectForKey:key];
+  if (source != nil) {
+    dispatch_source_cancel(source);
+    [mrbmacs_io_sources removeObjectForKey:key];
+  }
+  return mrb_nil_value();
+}
+
+static void
+mrbmacs_cancel_io_sources(void)
+{
+  for (NSNumber *key in [mrbmacs_io_sources allKeys]) {
+    dispatch_source_t source = [mrbmacs_io_sources objectForKey:key];
+    dispatch_source_cancel(source);
+  }
+  [mrbmacs_io_sources removeAllObjects];
+}
 
 static mrb_value
 mrbmacs_frame_exit(mrb_state *mrb, mrb_value self)
@@ -128,6 +198,15 @@ mrbmacs_pane_update_native_modeline(mrb_state *mrb, mrb_value self)
   [modeline.label setStringValue:[NSString stringWithUTF8String:text]];
   [modeline setNeedsLayout:YES];
   return mrb_nil_value();
+}
+
+static mrb_value
+mrbmacs_pane_native_client_width(mrb_state *mrb, mrb_value self)
+{
+  mrb_value native_handle = mrb_funcall(mrb, self, "native_handle", 0);
+  NSView *view = (NSView *)(intptr_t)mrb_integer(native_handle);
+
+  return mrb_float_value(mrb, NSWidth(view.bounds));
 }
 
 static NSColor *
@@ -680,6 +759,10 @@ main(int argc, char **argv)
       mrbmacs_pane_update_native_modeline, MRB_ARGS_REQ(1)
     );
     mrb_define_method(
+      mrbmacs_mrb, pane_class, "native_client_width",
+      mrbmacs_pane_native_client_width, MRB_ARGS_NONE()
+    );
+    mrb_define_method(
       mrbmacs_mrb, pane_class, "update_native_modeline_theme",
       mrbmacs_pane_update_native_modeline_theme, MRB_ARGS_REQ(2)
     );
@@ -732,6 +815,15 @@ main(int argc, char **argv)
       mrbmacs_mrb, application_class, "initialize_native_frame",
       mrbmacs_application_initialize_native_frame, MRB_ARGS_NONE()
     );
+    mrb_define_method(
+      mrbmacs_mrb, application_class, "watch_io_read_event",
+      mrbmacs_application_watch_io_read_event, MRB_ARGS_REQ(1)
+    );
+    mrb_define_method(
+      mrbmacs_mrb, application_class, "unwatch_io_read_event",
+      mrbmacs_application_unwatch_io_read_event, MRB_ARGS_REQ(1)
+    );
+    mrbmacs_io_sources = [[NSMutableDictionary alloc] init];
     mrbmacs_font_target = [[MrbmacsFontTarget alloc] init];
     arg_array = mrb_ary_new_capa(mrbmacs_mrb, argc - 1);
     for (i = 1; i < argc; i++) {
@@ -783,6 +875,8 @@ main(int argc, char **argv)
     [application run];
 
     [NSEvent removeMonitor:key_event_monitor];
+    mrbmacs_cancel_io_sources();
+    [mrbmacs_io_sources release];
     mrb_gc_unregister(mrbmacs_mrb, mrbmacs_app);
     mrb_gc_unregister(mrbmacs_mrb, mrbmacs_frame);
     mrb_gc_unregister(mrbmacs_mrb, mrbmacs_echo_view);
