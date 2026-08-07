@@ -94,6 +94,7 @@ class CocoaViewForLayoutTest
   attr_accessor :notification_callback
   attr_accessor :current_pos
   attr_accessor :text
+  attr_accessor :text_width_scale
   attr_reader :added_documents, :autocomplete_choose_single,
               :autocomplete_lists, :copied_ranges
   attr_reader :set_documents
@@ -103,6 +104,7 @@ class CocoaViewForLayoutTest
   attr_reader :caret_colors, :caret_styles
   attr_reader :command_keys
   attr_reader :margin_messages
+  attr_reader :fold_messages
   attr_reader :mod_event_masks
   attr_reader :theme_messages
   attr_reader :vertical_scrollbar
@@ -119,6 +121,7 @@ class CocoaViewForLayoutTest
     @caret_styles = []
     @command_keys = []
     @margin_messages = []
+    @fold_messages = []
     @mod_event_masks = []
     @horizontal_scrollbar = true
     @vertical_scrollbar = true
@@ -126,6 +129,7 @@ class CocoaViewForLayoutTest
     @autocomplete_choose_single = nil
     @autocomplete_lists = []
     @text = ''
+    @text_width_scale = 1
     @save_point = false
     @search_lengths = []
     @replacement_lengths = []
@@ -454,7 +458,7 @@ class CocoaViewForLayoutTest
   end
 
   def sci_text_width(_style, text)
-    text.bytesize
+    text.bytesize * @text_width_scale
   end
 
   def sci_annotation_set_text(line, text)
@@ -475,6 +479,14 @@ class CocoaViewForLayoutTest
 
   def sci_set_marginsensitiven(margin, sensitive)
     @margin_messages << [:margin_sensitive, margin, sensitive]
+  end
+
+  def sci_set_automatic_fold(value)
+    @fold_messages << [:automatic_fold, value]
+  end
+
+  def sci_marker_define(marker, symbol)
+    @fold_messages << [:marker, marker, symbol]
   end
 
   def sci_set_mod_event_mask(mask)
@@ -688,6 +700,67 @@ assert('Mrbmacs::PaneCocoa configures its line number margin') do
   assert_equal margin_width_count + 1, view.margin_messages.count { |message|
     message == [:margin_width, Mrbmacs::EditWindow::MARGIN_LINE_NUMBER, 6]
   }
+end
+
+assert('Mrbmacs::PaneCocoa configures its folding margin') do
+  view = CocoaViewForLayoutTest.new
+  Mrbmacs::PaneCocoa.new(view)
+
+  assert_true view.margin_messages.include?(
+    [:margin_width, Mrbmacs::EditWindow::MARGIN_FOLDING, 2]
+  )
+  assert_true view.margin_messages.include?(
+    [
+      :margin_mask,
+      Mrbmacs::EditWindow::MARGIN_FOLDING,
+      Scintilla::SC_MASK_FOLDERS
+    ]
+  )
+  assert_true view.margin_messages.include?(
+    [:margin_sensitive, Mrbmacs::EditWindow::MARGIN_FOLDING, 1]
+  )
+  assert_true view.fold_messages.include?(
+    [:automatic_fold, Scintilla::SC_AUTOMATICFOLD_CLICK]
+  )
+  assert_true view.fold_messages.include?(
+    [
+      :marker,
+      Scintilla::SC_MARKNUM_FOLDER,
+      Scintilla::SC_MARK_BOXPLUS
+    ]
+  )
+  assert_true view.fold_messages.include?(
+    [
+      :marker,
+      Scintilla::SC_MARKNUM_FOLDEROPEN,
+      Scintilla::SC_MARK_BOXMINUS
+    ]
+  )
+end
+
+assert('Mrbmacs::PaneCocoa configures the shared version control gutter') do
+  view = CocoaViewForLayoutTest.new
+  view.text_width_scale = 8
+  Mrbmacs::PaneCocoa.new(view)
+  marker_mask = (1 << Mrbmacs::MARKERN_VC_ADDED) |
+                (1 << Mrbmacs::MARKERN_VC_MODIFIED) |
+                (1 << Mrbmacs::MARKERN_VC_DELETED)
+
+  assert_equal [:margin_width, Mrbmacs::EditWindow::MARGIN_VC, 8],
+               view.margin_messages.select { |message|
+                 message[0] == :margin_width &&
+                   message[1] == Mrbmacs::EditWindow::MARGIN_VC
+               }.last
+  assert_true view.margin_messages.include?(
+    [:margin_mask, Mrbmacs::EditWindow::MARGIN_VC, marker_mask]
+  )
+  assert_true view.fold_messages.include?(
+    [
+      :marker,
+      Mrbmacs::MARKERN_VC_ADDED,
+      Scintilla::SC_MARK_LEFTRECT
+    ]
+  )
 end
 
 assert('Mrbmacs::PaneCocoa limits modification events to text changes') do

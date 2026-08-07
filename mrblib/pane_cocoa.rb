@@ -21,7 +21,9 @@ module Mrbmacs
         Scintilla::SC_MOD_INSERTTEXT | Scintilla::SC_MOD_DELETETEXT
       )
       initialize_caret
-      initialize_line_number_margin
+      set_margin
+      initialize_folding_markers
+      update_margin_widths
       self.buffer = buffer unless buffer.nil?
     end
 
@@ -33,15 +35,33 @@ module Mrbmacs
       )
     end
 
-    def initialize_line_number_margin
+    def initialize_folding_markers
+      {
+        Scintilla::SC_MARKNUM_FOLDEROPEN => Scintilla::SC_MARK_BOXMINUS,
+        Scintilla::SC_MARKNUM_FOLDER => Scintilla::SC_MARK_BOXPLUS,
+        Scintilla::SC_MARKNUM_FOLDERSUB => Scintilla::SC_MARK_VLINE,
+        Scintilla::SC_MARKNUM_FOLDERTAIL => Scintilla::SC_MARK_LCORNER,
+        Scintilla::SC_MARKNUM_FOLDEREND => Scintilla::SC_MARK_BOXPLUSCONNECTED,
+        Scintilla::SC_MARKNUM_FOLDEROPENMID => Scintilla::SC_MARK_BOXMINUSCONNECTED,
+        Scintilla::SC_MARKNUM_FOLDERMIDTAIL => Scintilla::SC_MARK_TCORNER
+      }.each do |marker, symbol|
+        @view.sci_marker_define(marker, symbol)
+      end
+    end
+
+    def update_margin_widths
       @view.sci_set_margin_widthn(
         MARGIN_LINE_NUMBER,
         @view.sci_text_width(Scintilla::STYLE_LINENUMBER, '_99999')
       )
-      @view.sci_set_margin_maskn(
-        MARGIN_LINE_NUMBER, MARKERMASK_LINE_NUMBER
+      @view.sci_set_margin_widthn(
+        MARGIN_FOLDING,
+        @view.sci_text_width(Scintilla::STYLE_LINENUMBER, '__')
       )
-      @view.sci_set_marginsensitiven(MARGIN_LINE_NUMBER, 1)
+      @view.sci_set_margin_widthn(
+        MARGIN_VC,
+        @view.sci_text_width(Scintilla::STYLE_LINENUMBER, '_')
+      )
     end
 
     def buffer=(buffer)
@@ -106,7 +126,7 @@ module Mrbmacs
         @view.sci_marker_set_fore(marker, theme.foreground_color)
         @view.sci_marker_set_back(marker, theme.background_color)
       end
-      initialize_line_number_margin
+      update_margin_widths
     end
 
     def apply_modeline_theme(active)
