@@ -67,6 +67,16 @@ class CocoaFrameForExitTest < Mrbmacs::FrameCocoa
   end
 end
 
+class CocoaFrameForNativeSplitTest < Mrbmacs::FrameCocoa
+  def pane_can_split?(_pane, _direction, _size)
+    true
+  end
+
+  def split_native_pane(_pane, _new_pane, _direction)
+    4321
+  end
+end
+
 
 class CocoaFrameForEchoInputTest < Mrbmacs::FrameCocoa
   attr_accessor :input_events
@@ -1357,6 +1367,48 @@ assert('Cocoa tab maintains a nested pane layout tree') do
   assert_equal [first, second, third], tab.panes
   assert_equal :vertical, vertical.orientation
   assert_equal :horizontal, horizontal.orientation
+  assert_nil vertical.native_handle
+end
+
+assert('Cocoa frame resizes the nearest matching native split') do
+  first = Mrbmacs::PaneCocoa.new(CocoaViewForLayoutTest.new(101))
+  second = Mrbmacs::PaneCocoa.new(CocoaViewForLayoutTest.new(102))
+  third = Mrbmacs::PaneCocoa.new(CocoaViewForLayoutTest.new(103))
+  tab = Mrbmacs::TabCocoa.new(first)
+  horizontal = tab.split(first, second, :horizontal)
+  vertical = tab.split(first, third, :vertical)
+  horizontal.native_handle = 201
+  vertical.native_handle = 202
+  frame = Mrbmacs::FrameCocoa.new(tab)
+  moves = []
+  frame.define_singleton_method(:native_divider_thickness) do |split|
+    split.equal?(vertical) ? 2 : 1
+  end
+  frame.define_singleton_method(:move_native_divider) do |*arguments|
+    moves << arguments
+    true
+  end
+
+  frame.enlarge_window(first, 2)
+  frame.enlarge_window_horizontally(first, 3)
+  frame.enlarge_window_horizontally(second, 2)
+
+  assert_equal [vertical, true, 32, 48, 48], moves[0]
+  assert_equal [horizontal, true, 3, 10, 10], moves[1]
+  assert_equal [horizontal, false, 2, 10, 10], moves[2]
+  assert_equal 21, frame.minimum_native_extent(horizontal, :horizontal)
+  assert_equal 98, frame.minimum_native_extent(horizontal, :vertical)
+end
+
+assert('Cocoa frame ignores resize without a split in that direction') do
+  first = Mrbmacs::PaneCocoa.new(CocoaViewForLayoutTest.new(101))
+  second = Mrbmacs::PaneCocoa.new(CocoaViewForLayoutTest.new(102))
+  tab = Mrbmacs::TabCocoa.new(first)
+  split = tab.split(first, second, :horizontal)
+  split.native_handle = 201
+  frame = Mrbmacs::FrameCocoa.new(tab)
+
+  assert_false frame.enlarge_window(first, 1)
 end
 
 assert('Cocoa frame cycles and deletes panes through the layout tree') do
@@ -1416,6 +1468,19 @@ assert('Cocoa application rejects a pane that is too small to split') do
 
   assert_equal [pane], tab.panes
   assert_equal 'too small for splitting', frame.last_message
+end
+
+assert('Cocoa application associates a native split with its layout node') do
+  buffer = Mrbmacs::Buffer.new('*scratch*')
+  pane = Mrbmacs::PaneCocoa.new(Scintilla::ScintillaCocoa.new, buffer)
+  tab = Mrbmacs::TabCocoa.new(pane)
+  frame = CocoaFrameForNativeSplitTest.new(tab)
+  frame.native_handle = 1
+  app = build_cocoa_application_for_test(frame, buffer)
+
+  app.split_window(false)
+
+  assert_equal 4321, tab.layout_root.native_handle
 end
 
 assert('Cocoa frame refuses to delete its sole pane') do
