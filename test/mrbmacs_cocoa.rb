@@ -131,6 +131,7 @@ class CocoaViewForLayoutTest
     @caret_styles = []
     @command_keys = []
     @margin_messages = []
+    @margin_widths = {}
     @fold_messages = []
     @mod_event_masks = []
     @horizontal_scrollbar = true
@@ -371,6 +372,10 @@ class CocoaViewForLayoutTest
     @theme_messages << [:selection_back, use_setting, color]
   end
 
+  def sci_set_element_colour(element, color)
+    @theme_messages << [:element_colour, element, color]
+  end
+
   def sci_set_fold_margin_colour(use_setting, color)
     @theme_messages << [:fold_margin_color, use_setting, color]
   end
@@ -481,6 +486,15 @@ class CocoaViewForLayoutTest
 
   def sci_set_margin_widthn(margin, width)
     @margin_messages << [:margin_width, margin, width]
+    @margin_widths[margin] = width
+  end
+
+  def sci_get_margins
+    5
+  end
+
+  def sci_get_margin_widthn(margin)
+    @margin_widths[margin] || 0
   end
 
   def sci_set_margin_maskn(margin, mask)
@@ -641,9 +655,23 @@ assert('Mrbmacs::ApplicationCocoa owns its Cocoa frame and initial buffer') do
   assert_equal [buffer], app.buffer_list
   assert_equal({}, app.sci_handler)
   assert_kind_of Mrbmacs::Config, app.config
-  assert_kind_of Mrbmacs::SolarizedDarkTheme, app.theme
+  assert_kind_of Mrbmacs::Base16DefaultDarkTheme, app.theme
   assert_true pane.view.theme_messages.include?(
     [:style_fore, Scintilla::STYLE_DEFAULT, app.theme.foreground_color]
+  )
+  assert_true pane.view.theme_messages.include?(
+    [
+      :element_colour,
+      Scintilla::SC_ELEMENT_SELECTION_INACTIVE_TEXT,
+      app.theme.background_color | 0xff000000
+    ]
+  )
+  assert_true pane.view.theme_messages.include?(
+    [
+      :element_colour,
+      Scintilla::SC_ELEMENT_SELECTION_INACTIVE_BACK,
+      app.theme.foreground_color | 0xff000000
+    ]
   )
 end
 
@@ -798,6 +826,25 @@ assert('Mrbmacs::PaneCocoa reports its native width in text columns') do
   pane = CocoaPaneWidthForTest.new(CocoaViewForLayoutTest.new)
 
   assert_equal 800, pane.width
+end
+
+assert('Cocoa frame derives its initial editor size from columns and lines') do
+  view = CocoaViewForLayoutTest.new
+  view.text_width_scale = 8
+  pane = Mrbmacs::PaneCocoa.new(view)
+  frame = Mrbmacs::FrameCocoa.new(Mrbmacs::TabCocoa.new(pane))
+
+  assert_equal 120, Mrbmacs::FrameCocoa::INITIAL_COLUMNS
+  assert_equal 40, Mrbmacs::FrameCocoa::INITIAL_LINES
+  assert_equal 1040, frame.initial_native_editor_width
+  assert_equal 640, frame.initial_native_editor_height
+
+  view.text_width_scale = 10
+  view.define_singleton_method(:sci_text_height) { |_line| 20 }
+  pane.update_margin_widths
+
+  assert_equal 1300, frame.initial_native_editor_width
+  assert_equal 800, frame.initial_native_editor_height
 end
 
 assert('Mrbmacs::ApplicationCocoa registers native IO readability') do
