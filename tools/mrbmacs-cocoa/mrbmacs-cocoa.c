@@ -421,7 +421,7 @@ static mrb_value
 mrbmacs_application_initialize_native_frame(mrb_state *mrb, mrb_value self)
 {
   const CGFloat echo_height = 24.0;
-  NSRect window_frame = NSMakeRect(0, 0, 900, 650);
+  NSRect window_frame = NSMakeRect(0, 0, 100, 100);
   NSWindowStyleMask style =
     NSWindowStyleMaskTitled |
     NSWindowStyleMaskClosable |
@@ -481,6 +481,45 @@ mrbmacs_application_initialize_native_frame(mrb_state *mrb, mrb_value self)
     mrb_iv_get(mrb, mrbmacs_frame, mrb_intern_lit(mrb, "@font_size"))
   );
   return mrb_nil_value();
+}
+
+static void
+mrbmacs_apply_initial_window_size(mrb_state *mrb, mrb_value frame)
+{
+  mrb_value pane = mrb_funcall(mrb, frame, "active_pane", 0);
+  mrb_value echo = mrb_funcall(mrb, frame, "echo_win", 0);
+  mrb_int editor_width = mrb_integer(mrb_funcall(
+    mrb, frame, "initial_native_editor_width", 0
+  ));
+  mrb_int editor_height = mrb_integer(mrb_funcall(
+    mrb, frame, "initial_native_editor_height", 0
+  ));
+  NSView *echo_view = (NSView *)(intptr_t)mrb_integer(mrb_funcall(
+    mrb, echo, "native_handle", 0
+  ));
+  CGFloat modeline_height = (CGFloat)mrb_integer(mrb_funcall(
+    mrb, pane, "native_modeline_height", 0
+  ));
+  NSSize current_content_size = mrbmacs_window.contentView.bounds.size;
+  NSRect current_frame = mrbmacs_window.frame;
+  NSScreen *screen = mrbmacs_window.screen ?: [NSScreen mainScreen];
+  NSSize content_size = NSMakeSize(
+    (CGFloat)editor_width,
+    (CGFloat)editor_height + modeline_height + NSHeight(echo_view.frame)
+  );
+
+  if (screen != nil) {
+    NSRect visible_frame = screen.visibleFrame;
+    CGFloat chrome_width = NSWidth(current_frame) - current_content_size.width;
+    CGFloat chrome_height = NSHeight(current_frame) - current_content_size.height;
+    content_size.width = MIN(
+      content_size.width, MAX(1.0, NSWidth(visible_frame) - chrome_width)
+    );
+    content_size.height = MIN(
+      content_size.height, MAX(1.0, NSHeight(visible_frame) - chrome_height)
+    );
+  }
+  [mrbmacs_window setContentSize:content_size];
 }
 
 static NSView *
@@ -936,19 +975,20 @@ main(int argc, char **argv)
       mrb_close(mrbmacs_mrb);
       return EXIT_FAILURE;
     }
+    mrb_gc_register(mrbmacs_mrb, mrbmacs_app);
     mrbmacs_frame = mrb_iv_get(
       mrbmacs_mrb, mrbmacs_app, mrb_intern_lit(mrbmacs_mrb, "@frame")
     );
+    mrb_gc_register(mrbmacs_mrb, mrbmacs_frame);
     mrbmacs_view = mrb_funcall(
       mrbmacs_mrb, mrbmacs_frame, "view", 0
     );
+    mrb_gc_register(mrbmacs_mrb, mrbmacs_view);
     mrbmacs_echo_view = mrb_funcall(
       mrbmacs_mrb, mrbmacs_frame, "echo_win", 0
     );
-    mrb_gc_register(mrbmacs_mrb, mrbmacs_app);
-    mrb_gc_register(mrbmacs_mrb, mrbmacs_frame);
-    mrb_gc_register(mrbmacs_mrb, mrbmacs_view);
     mrb_gc_register(mrbmacs_mrb, mrbmacs_echo_view);
+    mrbmacs_apply_initial_window_size(mrbmacs_mrb, mrbmacs_frame);
     mrb_gv_set(
       mrbmacs_mrb, mrb_intern_lit(mrbmacs_mrb, "$app"), mrbmacs_app
     );

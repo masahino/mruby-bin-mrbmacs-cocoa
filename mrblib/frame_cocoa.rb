@@ -1,6 +1,9 @@
 module Mrbmacs
   # One native macOS window containing one or more tabs.
   class FrameCocoa < FrameBase
+    INITIAL_COLUMNS = 120
+    INITIAL_LINES = 40
+
     attr_reader :echo_win
     attr_reader :font_name, :font_size
     attr_reader :tabs
@@ -53,6 +56,20 @@ module Mrbmacs
 
     def edit_win_list
       @active_tab.panes
+    end
+
+    def initial_native_editor_width(columns = INITIAL_COLUMNS)
+      width = view.sci_text_width(
+        Scintilla::STYLE_DEFAULT, '0' * columns
+      )
+      view.sci_get_margins.times do |margin|
+        width += view.sci_get_margin_widthn(margin)
+      end
+      width
+    end
+
+    def initial_native_editor_height(lines = INITIAL_LINES)
+      view.sci_text_height(0) * lines
     end
 
     def switch_window(new_pane)
