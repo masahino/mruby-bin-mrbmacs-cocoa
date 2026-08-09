@@ -1,4 +1,5 @@
 require 'fileutils'
+require 'tmpdir'
 
 MACOS_APP_NAME = 'Mrbmacs'.freeze
 MACOS_APP_PATH = File.expand_path("build/#{MACOS_APP_NAME}.app", __dir__ + '/..')
@@ -65,6 +66,30 @@ def macos_app_version
   ).strip
 end
 
+def create_macos_app_archive(archive)
+  sh(
+    'ditto', '-c', '-k', '--norsrc', '--keepParent', MACOS_APP_PATH,
+    archive
+  )
+end
+
+def verify_macos_app_archive(archive)
+  Dir.mktmpdir('mrbmacs-release-') do |directory|
+    sh 'ditto', '-x', '-k', archive, directory
+    app_path = File.join(directory, "#{MACOS_APP_NAME}.app")
+    metadata_files = Dir.glob(
+      File.join(app_path, '**', '._*'), File::FNM_DOTMATCH
+    )
+    unless metadata_files.empty?
+      raise "Archive contains AppleDouble metadata: #{metadata_files.first}"
+    end
+
+    sh 'codesign', '--verify', '--deep', '--strict', app_path
+    sh 'xcrun', 'stapler', 'validate', app_path
+    sh 'spctl', '--assess', '--type', 'execute', '--verbose=4', app_path
+  end
+end
+
 desc 'Build the macOS application bundle'
 task app: :compile do
   identity = macos_codesign_identity
@@ -122,10 +147,7 @@ task release: :app do
   raise 'A Developer ID Application identity is required' if identity == '-'
 
   FileUtils.rm_f(MACOS_NOTARIZATION_ARCHIVE)
-  sh(
-    'ditto', '-c', '-k', '--keepParent', MACOS_APP_PATH,
-    MACOS_NOTARIZATION_ARCHIVE
-  )
+  create_macos_app_archive(MACOS_NOTARIZATION_ARCHIVE)
   sh(
     'xcrun', 'notarytool', 'submit', MACOS_NOTARIZATION_ARCHIVE,
     '--keychain-profile', MACOS_NOTARY_PROFILE,
@@ -140,7 +162,8 @@ task release: :app do
     "build/Mrbmacs-#{macos_app_version}-macos-arm64.zip", __dir__ + '/..'
   )
   FileUtils.rm_f(archive)
-  sh 'ditto', '-c', '-k', '--keepParent', MACOS_APP_PATH, archive
+  create_macos_app_archive(archive)
+  verify_macos_app_archive(archive)
   FileUtils.rm_f(MACOS_NOTARIZATION_ARCHIVE)
   puts "Created #{archive}"
 end
