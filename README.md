@@ -43,6 +43,11 @@ Tabs represent complete pane layouts rather than individual buffers. This
 keeps tabs compatible with Emacs-style window splitting and allows a buffer to
 be displayed in more than one pane or tab.
 
+## Download
+
+Signed and notarized preview builds for Apple Silicon are available from
+[GitHub Releases](https://github.com/masahino/mruby-bin-mrbmacs-cocoa/releases).
+
 ## Build
 
 The build downloads mruby 4.0.0 and all required mrbgems, including
@@ -70,35 +75,8 @@ Run the development executable:
 ./mruby/bin/mrbmacs-cocoa path/to/file
 ```
 
-Build a local macOS application bundle:
-
-```sh
-rake app
-open build/Mrbmacs.app
-```
-
-The application bundle includes `Scintilla.framework`. When one Developer ID
-Application identity is available in the keychain, the bundle is signed with
-Hardened Runtime and a secure timestamp. Otherwise it is ad-hoc signed. Set
-`CODESIGN_IDENTITY` to select an identity explicitly. Use `rake run_app` to
-build and open the bundle in one command.
-
-For distribution, first create an app-specific password for the Apple Account
-and store the notarization credentials in the login keychain:
-
-```sh
-APPLE_ID=you@example.com rake notarization_credentials
-```
-
-Then build the signed, notarized, stapled Apple Silicon release archive:
-
-```sh
-rake release
-```
-
-The keychain profile name defaults to `mrbmacs-notary` and can be overridden
-with `NOTARY_PROFILE`. The final archive is written to `build/`.
-
 The Cocoa frontend uses the shared mrbmacs command-line options and loads
 `~/.mrbmacsrc` during startup. Use `-q` to skip the init file or `-l FILE` to
 load an additional Ruby file.
+
+Release maintainers should see [docs/release.md](docs/release.md).
