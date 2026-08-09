@@ -6,6 +6,7 @@
 #include <mruby/class.h>
 #include <mruby/string.h>
 #include <mruby/variable.h>
+#include <unistd.h>
 
 static mrb_state *mrbmacs_mrb;
 static mrb_value mrbmacs_frame;
@@ -72,6 +73,19 @@ enum {
 static void print_mruby_error(mrb_state *mrb);
 static void mrbmacs_deliver_pending_open_files(void);
 static void mrbmacs_schedule_pending_open_files(void);
+
+static void
+mrbmacs_set_app_default_directory(void)
+{
+  if (getppid() != 1) {
+    return;
+  }
+
+  if (![[NSFileManager defaultManager]
+        changeCurrentDirectoryPath:NSHomeDirectory()]) {
+    fprintf(stderr, "Unable to change directory to the user home\n");
+  }
+}
 
 @interface MrbmacsApplicationDelegate : NSObject <NSApplicationDelegate>
 @end
@@ -952,6 +966,7 @@ main(int argc, char **argv)
 
     [application setActivationPolicy:NSApplicationActivationPolicyRegular];
     create_application_menu();
+    mrbmacs_set_app_default_directory();
     mrbmacs_pending_open_paths = [[NSMutableArray alloc] init];
     mrbmacs_application_delegate = [[MrbmacsApplicationDelegate alloc] init];
     [application setDelegate:mrbmacs_application_delegate];
