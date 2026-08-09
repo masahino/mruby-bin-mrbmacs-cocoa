@@ -1,5 +1,7 @@
 require 'rbconfig'
 
+Dir[File.expand_path('tasks/*.rake', __dir__)].sort.each { |task| load task }
+
 MRUBY_CONFIG = File.expand_path(ENV['MRUBY_CONFIG'] || 'build_config.rb')
 MRUBY_VERSION = ENV['MRUBY_VERSION'] || '4.0.0'
 RAKE = "#{RbConfig.ruby} #{Gem.bin_path('rake', 'rake')}"
