@@ -2,6 +2,8 @@
 
 Native macOS frontend for mrbmacs, built with AppKit and Scintilla Cocoa.
 
+![mrbmacs Cocoa](docs/images/mrbmacs-cocoa.png)
+
 ## Current milestone
 
 The initial implementation:
