@@ -58,9 +58,19 @@ module Mrbmacs
     end
 
     def sci_notify(notification)
+      if notification['code'] == Scintilla::SCN_URIDROPPED
+        queue_native_file_uri(notification['text'])
+        return
+      end
+
       $stderr.puts notification['code'] if $DEBUG
       call_sci_event(notification)
       @frame.modeline(self) unless @frame.nil?
+    end
+
+    def open_native_files(paths)
+      paths.each { |path| find_file(path) }
+      @frame.view_win.sci_grab_focus
     end
 
     def sci_notify_from_pane(pane, notification)
