@@ -10,12 +10,15 @@
 static mrb_state *mrbmacs_mrb;
 static mrb_value mrbmacs_frame;
 static mrb_value mrbmacs_app;
+static BOOL mrbmacs_app_ready;
 static id key_event_monitor;
+static id mrbmacs_application_delegate;
 static NSWindow *mrbmacs_window;
 static NSView *mrbmacs_echo_native_view;
 static BOOL mrbmacs_confirmation_input;
 static id mrbmacs_font_target;
 static NSMutableDictionary *mrbmacs_io_sources;
+static NSMutableArray *mrbmacs_pending_open_paths;
 
 enum {
   MRBMACS_MODAL_RESPONSE_TAB = 1001,
@@ -67,6 +70,86 @@ enum {
 @end
 
 static void print_mruby_error(mrb_state *mrb);
+static void mrbmacs_deliver_pending_open_files(void);
+static void mrbmacs_schedule_pending_open_files(void);
+
+@interface MrbmacsApplicationDelegate : NSObject <NSApplicationDelegate>
+@end
+
+@implementation MrbmacsApplicationDelegate
+- (void)application:(NSApplication *)sender openFiles:(NSArray *)filenames
+{
+  [mrbmacs_pending_open_paths addObjectsFromArray:filenames];
+  mrbmacs_deliver_pending_open_files();
+  [sender replyToOpenOrPrint:NSApplicationDelegateReplySuccess];
+}
+@end
+
+static void
+mrbmacs_deliver_pending_open_files(void)
+{
+  NSArray *paths;
+  mrb_value path_array;
+
+  if (!mrbmacs_app_ready || NSApp.modalWindow != nil ||
+      mrbmacs_pending_open_paths.count == 0) {
+    return;
+  }
+
+  paths = [mrbmacs_pending_open_paths copy];
+  [mrbmacs_pending_open_paths removeAllObjects];
+  path_array = mrb_ary_new_capa(mrbmacs_mrb, (mrb_int)paths.count);
+  for (NSString *path in paths) {
+    mrb_ary_push(
+      mrbmacs_mrb, path_array,
+      mrb_str_new_cstr(mrbmacs_mrb, path.fileSystemRepresentation)
+    );
+  }
+  [paths release];
+  mrb_funcall(
+    mrbmacs_mrb, mrbmacs_app, "open_native_files", 1, path_array
+  );
+  if (mrbmacs_mrb->exc != NULL) {
+    print_mruby_error(mrbmacs_mrb);
+  }
+}
+
+static void
+mrbmacs_schedule_pending_open_files(void)
+{
+  dispatch_async(dispatch_get_main_queue(), ^{
+    mrbmacs_deliver_pending_open_files();
+  });
+}
+
+static mrb_value
+mrbmacs_application_queue_native_file_uri(mrb_state *mrb, mrb_value self)
+{
+  char *uri_text;
+  NSString *uri_string;
+  NSString *path;
+  NSURL *url;
+
+  (void)self;
+  mrb_get_args(mrb, "z", &uri_text);
+  uri_string = [NSString stringWithUTF8String:uri_text];
+  if (uri_string == nil) {
+    return mrb_false_value();
+  }
+  if (uri_string.isAbsolutePath) {
+    path = uri_string;
+  } else {
+    url = [NSURL URLWithString:uri_string];
+    if (url == nil || !url.isFileURL || url.path == nil) {
+      return mrb_false_value();
+    }
+    path = url.path;
+  }
+
+  [mrbmacs_pending_open_paths addObject:path];
+  mrbmacs_deliver_pending_open_files();
+  return mrb_true_value();
+}
 
 static mrb_value
 mrbmacs_application_watch_io_read_event(mrb_state *mrb, mrb_value self)
@@ -154,6 +237,7 @@ mrbmacs_frame_wait_echo_event(mrb_state *mrb, mrb_value self)
   echo_win = mrb_iv_get(mrb, self, mrb_intern_lit(mrb, "@echo_win"));
   mrb_funcall(mrb, echo_win, "sci_grab_focus", 0);
   response = [NSApp runModalForWindow:NSApp.keyWindow];
+  mrbmacs_schedule_pending_open_files();
   if (response == NSModalResponseOK) {
     return mrb_symbol_value(mrb_intern_lit(mrb, "enter"));
   }
@@ -174,6 +258,7 @@ mrbmacs_frame_wait_confirmation_event(mrb_state *mrb, mrb_value self)
   mrbmacs_confirmation_input = YES;
   response = [NSApp runModalForWindow:NSApp.keyWindow];
   mrbmacs_confirmation_input = NO;
+  mrbmacs_schedule_pending_open_files();
   if (response == MRBMACS_MODAL_RESPONSE_YES) {
     return mrb_symbol_value(mrb_intern_lit(mrb, "yes"));
   }
@@ -867,6 +952,9 @@ main(int argc, char **argv)
 
     [application setActivationPolicy:NSApplicationActivationPolicyRegular];
     create_application_menu();
+    mrbmacs_pending_open_paths = [[NSMutableArray alloc] init];
+    mrbmacs_application_delegate = [[MrbmacsApplicationDelegate alloc] init];
+    [application setDelegate:mrbmacs_application_delegate];
 
     mrbmacs_mrb = mrb_open();
     if (mrbmacs_mrb == NULL) {
@@ -959,6 +1047,10 @@ main(int argc, char **argv)
       mrbmacs_mrb, application_class, "unwatch_io_read_event",
       mrbmacs_application_unwatch_io_read_event, MRB_ARGS_REQ(1)
     );
+    mrb_define_method(
+      mrbmacs_mrb, application_class, "queue_native_file_uri",
+      mrbmacs_application_queue_native_file_uri, MRB_ARGS_REQ(1)
+    );
     mrbmacs_io_sources = [[NSMutableDictionary alloc] init];
     mrbmacs_font_target = [[MrbmacsFontTarget alloc] init];
     arg_array = mrb_ary_new_capa(mrbmacs_mrb, argc - 1);
@@ -976,6 +1068,7 @@ main(int argc, char **argv)
       return EXIT_FAILURE;
     }
     mrb_gc_register(mrbmacs_mrb, mrbmacs_app);
+    mrbmacs_app_ready = YES;
     mrbmacs_frame = mrb_iv_get(
       mrbmacs_mrb, mrbmacs_app, mrb_intern_lit(mrbmacs_mrb, "@frame")
     );
@@ -1003,6 +1096,7 @@ main(int argc, char **argv)
     [mrbmacs_window makeKeyAndOrderFront:nil];
 
     [application activateIgnoringOtherApps:YES];
+    mrbmacs_deliver_pending_open_files();
     mrb_funcall(mrbmacs_mrb, mrbmacs_view, "sci_grab_focus", 0);
     if (mrbmacs_mrb->exc != NULL) {
       print_mruby_error(mrbmacs_mrb);
@@ -1012,6 +1106,10 @@ main(int argc, char **argv)
     [application run];
 
     [NSEvent removeMonitor:key_event_monitor];
+    mrbmacs_app_ready = NO;
+    [application setDelegate:nil];
+    [mrbmacs_application_delegate release];
+    [mrbmacs_pending_open_paths release];
     mrbmacs_cancel_io_sources();
     [mrbmacs_io_sources release];
     mrb_gc_unregister(mrbmacs_mrb, mrbmacs_app);
