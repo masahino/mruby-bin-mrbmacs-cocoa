@@ -75,6 +75,102 @@ static void mrbmacs_deliver_pending_open_files(void);
 static void mrbmacs_schedule_pending_open_files(void);
 
 static void
+mrbmacs_set_app_shell_path(void)
+{
+  NSString *shell;
+  NSString *output_path;
+  NSFileHandle *output_handle;
+  NSTask *task;
+  NSDate *deadline;
+  NSData *output_data;
+  NSString *output;
+  NSRange start;
+  NSRange end;
+  NSString *path;
+
+  if (getppid() != 1) {
+    return;
+  }
+
+  shell = [[[NSProcessInfo processInfo] environment] objectForKey:@"SHELL"];
+  if (shell.length == 0 ||
+      ![[NSFileManager defaultManager] isExecutableFileAtPath:shell]) {
+    return;
+  }
+
+  output_path = [NSTemporaryDirectory() stringByAppendingPathComponent:
+    [[NSUUID UUID] UUIDString]];
+  if (![[NSFileManager defaultManager] createFileAtPath:output_path
+                                               contents:nil
+                                             attributes:nil]) {
+    return;
+  }
+
+  output_handle = [NSFileHandle fileHandleForWritingAtPath:output_path];
+  task = [[[NSTask alloc] init] autorelease];
+  [task setLaunchPath:shell];
+  [task setArguments:@[
+    @"-i", @"-l", @"-c", @"printf '\\036%s\\037' \"$PATH\""
+  ]];
+  [task setStandardOutput:output_handle];
+  [task setStandardError:[NSFileHandle fileHandleWithNullDevice]];
+
+  @try {
+    [task launch];
+  } @catch (NSException *exception) {
+    (void)exception;
+    [output_handle closeFile];
+    [[NSFileManager defaultManager] removeItemAtPath:output_path error:nil];
+    return;
+  }
+
+  deadline = [NSDate dateWithTimeIntervalSinceNow:3.0];
+  while (task.running && deadline.timeIntervalSinceNow > 0) {
+    usleep(10000);
+  }
+  if (task.running) {
+    [task terminate];
+    [output_handle closeFile];
+    [[NSFileManager defaultManager] removeItemAtPath:output_path error:nil];
+    return;
+  }
+
+  [task waitUntilExit];
+  [output_handle closeFile];
+  if (task.terminationStatus != EXIT_SUCCESS) {
+    [[NSFileManager defaultManager] removeItemAtPath:output_path error:nil];
+    return;
+  }
+
+  output_data = [NSData dataWithContentsOfFile:output_path];
+  [[NSFileManager defaultManager] removeItemAtPath:output_path error:nil];
+  output = [[[NSString alloc] initWithData:output_data
+                                  encoding:NSUTF8StringEncoding] autorelease];
+  if (output == nil) {
+    return;
+  }
+
+  start = [output rangeOfString:@"\036"];
+  if (start.location == NSNotFound) {
+    return;
+  }
+  end = [output rangeOfString:@"\037"
+                      options:0
+                        range:NSMakeRange(NSMaxRange(start),
+                                          output.length - NSMaxRange(start))];
+  if (end.location == NSNotFound) {
+    return;
+  }
+
+  path = [output substringWithRange:NSMakeRange(
+    NSMaxRange(start), end.location - NSMaxRange(start)
+  )];
+  if (path.length > 0) {
+    setenv("PATH", path.fileSystemRepresentation, 1);
+  }
+}
+
+static void
 mrbmacs_set_app_default_directory(void)
 {
   if (getppid() != 1) {
@@ -966,6 +1062,7 @@ main(int argc, char **argv)
 
     [application setActivationPolicy:NSApplicationActivationPolicyRegular];
     create_application_menu();
+    mrbmacs_set_app_shell_path();
     mrbmacs_set_app_default_directory();
     mrbmacs_pending_open_paths = [[NSMutableArray alloc] init];
     mrbmacs_application_delegate = [[MrbmacsApplicationDelegate alloc] init];
