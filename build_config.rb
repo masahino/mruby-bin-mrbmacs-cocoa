@@ -20,4 +20,5 @@ MRuby::Build.new do |conf|
 
   conf.linker.libraries << 'c++'
   conf.enable_test
+  conf.enable_bintest
 end

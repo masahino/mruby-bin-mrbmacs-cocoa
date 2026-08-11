@@ -1,0 +1,5 @@
+puts @current_buffer.name
+puts !@frame.native_handle.nil?
+puts !@frame.active_pane.view.native_handle.nil?
+puts !@frame.echo_win.native_handle.nil?
+save_buffers_kill_terminal

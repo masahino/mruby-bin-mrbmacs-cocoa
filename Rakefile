@@ -27,6 +27,11 @@ task test: :mruby do
   sh "cd mruby && #{RAKE} all test MRUBY_CONFIG=#{MRUBY_CONFIG}"
 end
 
+desc 'Run mrbmacs Cocoa frontend binary tests'
+task bintest: :mruby do
+  sh "cd mruby && #{RAKE} all test:bin MRUBY_CONFIG=#{MRUBY_CONFIG}"
+end
+
 desc 'Clean generated build files'
 task :clean do
   next unless File.directory?('mruby')
