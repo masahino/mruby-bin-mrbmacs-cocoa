@@ -74,6 +74,9 @@ assert('Mrbmacs::ApplicationCocoa owns its Cocoa frame and initial buffer') do
   assert_kind_of Mrbmacs::Config, app.config
   assert_kind_of Mrbmacs::Base16DefaultDarkTheme, app.theme
   assert_true pane.view.theme_messages.include?(
+    [:lexer, buffer.mode.lexer]
+  )
+  assert_true pane.view.theme_messages.include?(
     [:style_fore, Scintilla::STYLE_DEFAULT, app.theme.foreground_color]
   )
   assert_true pane.view.theme_messages.include?(

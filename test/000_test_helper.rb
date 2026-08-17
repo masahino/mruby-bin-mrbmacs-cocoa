@@ -304,7 +304,7 @@ class CocoaViewForLayoutTest
   end
 
   def sci_set_lexer_language(language)
-    @messages << [:lexer, language]
+    @theme_messages << [:lexer, language]
   end
 
   def sci_style_set_fore(style, color)
