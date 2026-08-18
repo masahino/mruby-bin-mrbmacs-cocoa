@@ -118,6 +118,7 @@ class CocoaViewForLayoutTest
   attr_reader :theme_messages
   attr_reader :vertical_scrollbar
   attr_reader :annotations
+  attr_reader :autoc_max_heights, :autoc_separators, :codepages
 
   def initialize(docpointer = 100)
     @docpointer = docpointer
@@ -151,6 +152,9 @@ class CocoaViewForLayoutTest
     @theme_messages = []
     @undo_actions = []
     @annotations = []
+    @autoc_max_heights = []
+    @autoc_separators = []
+    @codepages = []
   end
 
   def sci_get_docpointer
@@ -225,6 +229,18 @@ class CocoaViewForLayoutTest
 
   def sci_set_caret_fore(color)
     @caret_colors << color
+  end
+
+  def sci_set_codepage(codepage)
+    @codepages << codepage
+  end
+
+  def sci_autoc_set_max_height(height)
+    @autoc_max_heights << height
+  end
+
+  def sci_autoc_set_separator(separator)
+    @autoc_separators << separator
   end
 
   def sci_assign_cmdkey(key, command)
@@ -469,6 +485,10 @@ class CocoaViewForLayoutTest
 
   def sci_set_margin_typen(margin, type)
     @margin_messages << [:margin_type, margin, type]
+  end
+
+  def sci_set_margin_backn(margin, color)
+    @margin_messages << [:margin_back, margin, color]
   end
 
   def sci_text_width(_style, text)
