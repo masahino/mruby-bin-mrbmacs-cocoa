@@ -17,9 +17,7 @@ module Mrbmacs
       @parent = nil
       @modeline_text = ''
       @view.notification_callback = ScintillaNotificationBridge.new(self)
-      @view.sci_set_mod_event_mask(
-        Scintilla::SC_MOD_INSERTTEXT | Scintilla::SC_MOD_DELETETEXT
-      )
+      init_sci_default
       initialize_caret
       set_margin
       initialize_folding_markers
@@ -135,10 +133,14 @@ module Mrbmacs
       apply_theme_base(theme)
       @view.sci_set_caret_fore(theme.foreground_color)
       @view.sci_set_fold_margin_colour(true, theme.background_color)
-      @view.sci_set_fold_margin_hicolour(true, theme.foreground_color)
+      @view.sci_set_fold_margin_hicolour(true, theme.background_color)
       (25..31).each do |marker|
-        @view.sci_marker_set_fore(marker, theme.foreground_color)
-        @view.sci_marker_set_back(marker, theme.background_color)
+        @view.sci_marker_set_fore(marker, theme.background_color)
+        @view.sci_marker_set_back(marker, theme.foreground_color)
+      end
+      if theme.font_color[:color_marker_breakpoint]
+        @sci.sci_marker_set_fore(Mrbmacs::MARKERN_BREAKPOINT, theme.font_color[:color_marker_breakpoint][0])
+        @sci.sci_marker_set_back(Mrbmacs::MARKERN_BREAKPOINT, theme.font_color[:color_marker_breakpoint][1])
       end
       update_margin_widths
     end

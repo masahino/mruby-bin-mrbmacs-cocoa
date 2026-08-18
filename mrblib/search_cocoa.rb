@@ -52,6 +52,7 @@ module Mrbmacs
         begin
           @isearch_setting_text = true
           @frame.set_isearch_text(@isearch_text)
+          @frame.update_isearch_prompt(isearch_prompt)
         ensure
           @isearch_setting_text = false
         end

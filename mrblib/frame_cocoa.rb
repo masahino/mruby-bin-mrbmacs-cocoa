@@ -321,6 +321,8 @@ module Mrbmacs
     def finish_isearch
       @echo_win.sci_clear_all
       echo_set_prompt('')
+      @echo_win.sci_add_text(1, ' ')
+      @echo_win.sci_clear_all
       view.sci_grab_focus
     end
 
@@ -333,6 +335,8 @@ module Mrbmacs
     def finish_query_replace
       @echo_win.sci_clear_all
       echo_set_prompt('')
+      @echo_win.sci_add_text(1, ' ')
+      @echo_win.sci_clear_all
       view.sci_grab_focus
     end
 
@@ -340,10 +344,8 @@ module Mrbmacs
       raise NotImplementedError
     end
 
-
     def wait_confirmation_event
       raise NotImplementedError
     end
   end
-
 end

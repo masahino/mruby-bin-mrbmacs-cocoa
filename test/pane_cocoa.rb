@@ -122,6 +122,15 @@ assert('Mrbmacs::PaneCocoa limits modification events to text changes') do
                view.mod_event_masks
 end
 
+assert('Mrbmacs::PaneCocoa applies shared Scintilla defaults') do
+  view = CocoaViewForLayoutTest.new
+  Mrbmacs::PaneCocoa.new(view)
+
+  assert_equal [Scintilla::SC_CP_UTF8], view.codepages
+  assert_equal [10], view.autoc_max_heights
+  assert_equal ["\t".ord], view.autoc_separators
+end
+
 assert('Mrbmacs::PaneCocoa reports its native width in text columns') do
   pane = CocoaPaneWidthForTest.new(CocoaViewForLayoutTest.new)
 
@@ -147,8 +156,39 @@ assert('Mrbmacs::PaneCocoa uses the theme foreground for its caret') do
   pane.apply_theme(dark_theme)
   pane.apply_theme(light_theme)
 
-  assert_equal [dark_theme.foreground_color, light_theme.foreground_color],
+  assert_equal [0xffffff, dark_theme.foreground_color, light_theme.foreground_color],
                view.caret_colors
+end
+
+assert('Mrbmacs::PaneCocoa uses the theme background for its fold margin') do
+  view = CocoaViewForLayoutTest.new
+  pane = Mrbmacs::PaneCocoa.new(view)
+  theme = Mrbmacs::SolarizedDarkTheme.new
+
+  pane.apply_theme(theme)
+
+  assert_true view.theme_messages.include?(
+    [:fold_margin_color, true, theme.background_color]
+  )
+  assert_true view.theme_messages.include?(
+    [:fold_margin_highlight, true, theme.background_color]
+  )
+end
+
+assert('Mrbmacs::PaneCocoa applies the breakpoint marker colors') do
+  view = CocoaViewForLayoutTest.new
+  pane = Mrbmacs::PaneCocoa.new(view)
+  theme = Mrbmacs::Theme.new
+  colors = theme.font_color[:color_marker_breakpoint]
+
+  pane.apply_theme(theme)
+
+  assert_true view.theme_messages.include?(
+    [:marker_fore, Mrbmacs::MARKERN_BREAKPOINT, colors[0]]
+  )
+  assert_true view.theme_messages.include?(
+    [:marker_back, Mrbmacs::MARKERN_BREAKPOINT, colors[1]]
+  )
 end
 
 assert('Mrbmacs::PaneCocoa assigns its initial document to a buffer') do

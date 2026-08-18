@@ -63,7 +63,6 @@ module Mrbmacs
         return
       end
 
-      $stderr.puts notification['code'] if $DEBUG
       call_sci_event(notification)
       @frame.modeline(self) unless @frame.nil?
     end
