@@ -81,4 +81,10 @@ The Cocoa frontend uses the shared mrbmacs command-line options and loads
 `~/.mrbmacsrc` during startup. Use `-q` to skip the init file or `-l FILE` to
 load an additional Ruby file.
 
+## Implementation notes
+
+- [docs/autocomplete-listbox.md](docs/autocomplete-listbox.md) — why the
+  autocomplete / user-list popup truncated long rows on recent macOS and how it
+  is fixed in this gem (without patching Scintilla).
+
 Release maintainers should see [docs/release.md](docs/release.md).

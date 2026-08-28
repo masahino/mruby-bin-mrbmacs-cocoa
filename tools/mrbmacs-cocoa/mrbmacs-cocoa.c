@@ -60,6 +60,7 @@ main(int argc, char **argv)
     mrbmacs_frame_register_methods(mrbmacs_mrb, mrbmacs);
     mrbmacs_pane_register_methods(mrbmacs_mrb, mrbmacs);
     mrbmacs_layout_register_methods(mrbmacs_mrb, mrbmacs);
+    mrbmacs_autoc_register_methods(mrbmacs_mrb, mrbmacs);
     application_class = mrb_class_get_under(
       mrbmacs_mrb, mrbmacs, "ApplicationCocoa"
     );

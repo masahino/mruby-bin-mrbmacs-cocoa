@@ -67,6 +67,9 @@ void mrbmacs_pane_register_methods(mrb_state *mrb,
 void mrbmacs_layout_register_methods(mrb_state *mrb,
                                      struct RClass *mrbmacs);
 
+void mrbmacs_autoc_register_methods(mrb_state *mrb,
+                                    struct RClass *mrbmacs);
+
 void mrbmacs_event_install_monitor(void);
 void mrbmacs_event_remove_monitor(void);
 
