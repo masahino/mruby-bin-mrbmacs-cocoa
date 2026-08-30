@@ -99,6 +99,16 @@ module Mrbmacs
         Scintilla::STYLE_DEFAULT, theme.background_color
       )
       @echo_win.sci_style_clear_all
+      # sci_style_clear_all resets STYLE_LINENUMBER.back to the light system
+      # "chrome" colour. The prompt lives in an SC_MARGIN_TEXT margin whose
+      # background is filled with STYLE_LINENUMBER.back, so without this the
+      # prompt sits on a light patch.
+      @echo_win.sci_style_set_fore(
+        Scintilla::STYLE_LINENUMBER, theme.foreground_color
+      )
+      @echo_win.sci_style_set_back(
+        Scintilla::STYLE_LINENUMBER, theme.background_color
+      )
       @echo_win.sci_set_caret_fore(theme.foreground_color)
     end
 
@@ -252,6 +262,7 @@ module Mrbmacs
       end
       input
     ensure
+      discard_echo_marked_text
       @echo_win.sci_autoc_cancel unless @echo_win.nil?
       echo_set_prompt('') unless @echo_win.nil?
       @echo_win.sci_add_text(1, ' ') unless @echo_win.nil?
@@ -297,6 +308,7 @@ module Mrbmacs
       echo_set_prompt(prompt)
       wait_confirmation_event == :yes
     ensure
+      discard_echo_marked_text
       @echo_win.sci_clear_all unless @echo_win.nil?
       echo_set_prompt('') unless @echo_win.nil?
       view.sci_grab_focus
@@ -319,6 +331,7 @@ module Mrbmacs
     end
 
     def finish_isearch
+      discard_echo_marked_text
       @echo_win.sci_clear_all
       echo_set_prompt('')
       @echo_win.sci_add_text(1, ' ')
@@ -333,6 +346,7 @@ module Mrbmacs
     end
 
     def finish_query_replace
+      discard_echo_marked_text
       @echo_win.sci_clear_all
       echo_set_prompt('')
       @echo_win.sci_add_text(1, ' ')

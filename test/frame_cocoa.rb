@@ -32,6 +32,23 @@ assert('Mrbmacs::FrameCocoa configures its echo-area caret') do
   assert_equal [theme.foreground_color], echo_win.caret_colors
 end
 
+assert('Mrbmacs::FrameCocoa themes the echo prompt margin background') do
+  pane = Mrbmacs::PaneCocoa.new(CocoaViewForLayoutTest.new)
+  echo_win = CocoaViewForLayoutTest.new
+  frame = Mrbmacs::FrameCocoa.new(Mrbmacs::TabCocoa.new(pane), echo_win)
+  theme = Mrbmacs::SolarizedDarkTheme.new
+
+  frame.apply_theme(theme)
+
+  clear_index = echo_win.theme_messages.index(:style_clear_all)
+  back_index = echo_win.theme_messages.index(
+    [:style_back, Scintilla::STYLE_LINENUMBER, theme.background_color]
+  )
+  assert_true !back_index.nil?
+  # Must run after style_clear_all, which resets STYLE_LINENUMBER to chrome.
+  assert_true back_index > clear_index
+end
+
 assert('Mrbmacs::FrameCocoa provides the shared notification queue') do
   pane = Mrbmacs::PaneCocoa.new(CocoaViewForLayoutTest.new)
   frame = Mrbmacs::FrameCocoa.new(Mrbmacs::TabCocoa.new(pane))
@@ -130,6 +147,21 @@ assert('Mrbmacs::FrameCocoa reads input through its shared echo area') do
   assert_true echo_win.margin_messages.include?([:margin_text, 0, 'Find file: '])
   assert_true echo_win.margin_messages.include?([:margin_text, 0, ''])
   assert_true view.messages.include?(:grab_focus)
+  assert_true frame.discarded_echo_marked_text
+end
+
+assert('Mrbmacs::FrameCocoa discards marked text when echo input is cancelled') do
+  view = CocoaViewForLayoutTest.new
+  echo_win = CocoaViewForLayoutTest.new
+  pane = Mrbmacs::PaneCocoa.new(view)
+  frame = CocoaFrameForEchoInputTest.new(
+    Mrbmacs::TabCocoa.new(pane), echo_win
+  )
+  frame.input_events = [:cancel]
+
+  assert_nil frame.echo_gets('Find file: ')
+  assert_true frame.discarded_echo_marked_text
+  assert_equal '', echo_win.text
 end
 
 

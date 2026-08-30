@@ -79,6 +79,11 @@ end
 
 class CocoaFrameForEchoInputTest < Mrbmacs::FrameCocoa
   attr_accessor :input_events
+  attr_reader :discarded_echo_marked_text
+
+  def discard_echo_marked_text
+    @discarded_echo_marked_text = true
+  end
 
   def wait_echo_event
     event = @input_events.shift

@@ -47,6 +47,34 @@ mrbmacs_frame_wait_confirmation_event(mrb_state *mrb, mrb_value self)
 }
 
 static mrb_value
+mrbmacs_frame_discard_echo_marked_text(mrb_state *mrb, mrb_value self)
+{
+  NSResponder *responder;
+  NSView *view;
+
+  (void)mrb;
+  (void)self;
+  if (NSApp.keyWindow == nil || mrbmacs_echo_native_view == nil) {
+    return mrb_nil_value();
+  }
+
+  responder = NSApp.keyWindow.firstResponder;
+  if (![responder isKindOfClass:[NSView class]]) {
+    return mrb_nil_value();
+  }
+
+  view = (NSView *)responder;
+  if (![view isDescendantOf:mrbmacs_echo_native_view] ||
+      ![view conformsToProtocol:@protocol(NSTextInputClient)]) {
+    return mrb_nil_value();
+  }
+
+  [[view inputContext] discardMarkedText];
+  [(id<NSTextInputClient>)view unmarkText];
+  return mrb_nil_value();
+}
+
+static mrb_value
 mrbmacs_frame_update_native_echo_height(mrb_state *mrb, mrb_value self)
 {
   mrb_int requested_height;
@@ -239,6 +267,8 @@ mrbmacs_frame_register_methods(mrb_state *mrb, struct RClass *mrbmacs)
     mrbmacs_frame_wait_echo_event, MRB_ARGS_NONE());
   mrb_define_method(mrb, frame_class, "wait_confirmation_event",
     mrbmacs_frame_wait_confirmation_event, MRB_ARGS_NONE());
+  mrb_define_method(mrb, frame_class, "discard_echo_marked_text",
+    mrbmacs_frame_discard_echo_marked_text, MRB_ARGS_NONE());
   mrb_define_method(mrb, frame_class, "select_font",
     mrbmacs_frame_select_font, MRB_ARGS_NONE());
   mrb_define_method(mrb, frame_class, "update_native_echo_height",
@@ -247,5 +277,3 @@ mrbmacs_frame_register_methods(mrb_state *mrb, struct RClass *mrbmacs)
     mrbmacs_application_initialize_native_frame, MRB_ARGS_NONE());
   mrbmacs_font_target = [[MrbmacsFontTarget alloc] init];
 }
-
-
