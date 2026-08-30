@@ -158,6 +158,7 @@ module Mrbmacs
     # through Scintilla's Cocoa text input path, including IME composition.
     def key_press(key)
       if key == 'Escape'
+        @frame.discard_edit_marked_text
         add_recent_key(key)
         @prefix_key = 'M-'
         return true
@@ -170,6 +171,7 @@ module Mrbmacs
         return false
       end
 
+      @frame.discard_edit_marked_text
       add_recent_key(key)
       if command.is_a?(Integer)
         @frame.view.send_message(command)

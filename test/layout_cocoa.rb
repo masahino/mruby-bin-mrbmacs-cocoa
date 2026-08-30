@@ -96,9 +96,12 @@ assert('Cocoa frame cycles and deletes panes through the layout tree') do
   tab.split(first, second, :vertical)
   tab.split(second, third, :horizontal)
   frame = Mrbmacs::FrameCocoa.new(tab)
+  discarded = false
+  frame.define_singleton_method(:discard_edit_marked_text) { discarded = true }
 
   frame.switch_window(second)
   assert_same second, frame.active_pane
+  assert_true discarded
   assert_true second.view.messages.include?(:grab_focus)
   frame.delete_window(second)
 

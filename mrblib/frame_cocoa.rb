@@ -74,6 +74,7 @@ module Mrbmacs
 
     def switch_window(new_pane)
       old_pane = active_pane
+      discard_edit_marked_text unless old_pane.equal?(new_pane)
       @active_tab.active_pane = new_pane
       old_pane.apply_modeline_theme(false) unless old_pane.equal?(new_pane)
       new_pane.apply_modeline_theme(true)

@@ -46,31 +46,55 @@ mrbmacs_frame_wait_confirmation_event(mrb_state *mrb, mrb_value self)
   return mrb_symbol_value(mrb_intern_lit(mrb, "no"));
 }
 
-static mrb_value
-mrbmacs_frame_discard_echo_marked_text(mrb_state *mrb, mrb_value self)
+static void
+mrbmacs_discard_marked_text_in_view(NSView *native_view)
 {
   NSResponder *responder;
   NSView *view;
 
-  (void)mrb;
-  (void)self;
-  if (NSApp.keyWindow == nil || mrbmacs_echo_native_view == nil) {
-    return mrb_nil_value();
+  if (NSApp.keyWindow == nil || native_view == nil) {
+    return;
   }
 
   responder = NSApp.keyWindow.firstResponder;
   if (![responder isKindOfClass:[NSView class]]) {
-    return mrb_nil_value();
+    return;
   }
 
   view = (NSView *)responder;
-  if (![view isDescendantOf:mrbmacs_echo_native_view] ||
+  if (![view isDescendantOf:native_view] ||
       ![view conformsToProtocol:@protocol(NSTextInputClient)]) {
-    return mrb_nil_value();
+    return;
   }
 
   [[view inputContext] discardMarkedText];
   [(id<NSTextInputClient>)view unmarkText];
+}
+
+static mrb_value
+mrbmacs_frame_discard_echo_marked_text(mrb_state *mrb, mrb_value self)
+{
+  (void)mrb;
+  (void)self;
+  mrbmacs_discard_marked_text_in_view(mrbmacs_echo_native_view);
+  return mrb_nil_value();
+}
+
+static mrb_value
+mrbmacs_frame_discard_edit_marked_text(mrb_state *mrb, mrb_value self)
+{
+  mrb_value pane;
+  mrb_value native_handle;
+  NSView *native_view;
+
+  pane = mrb_funcall(mrb, self, "active_pane", 0);
+  native_handle = mrb_funcall(mrb, pane, "native_handle", 0);
+  if (mrb_nil_p(native_handle)) {
+    return mrb_nil_value();
+  }
+
+  native_view = (NSView *)(intptr_t)mrb_integer(native_handle);
+  mrbmacs_discard_marked_text_in_view(native_view);
   return mrb_nil_value();
 }
 
@@ -269,6 +293,8 @@ mrbmacs_frame_register_methods(mrb_state *mrb, struct RClass *mrbmacs)
     mrbmacs_frame_wait_confirmation_event, MRB_ARGS_NONE());
   mrb_define_method(mrb, frame_class, "discard_echo_marked_text",
     mrbmacs_frame_discard_echo_marked_text, MRB_ARGS_NONE());
+  mrb_define_method(mrb, frame_class, "discard_edit_marked_text",
+    mrbmacs_frame_discard_edit_marked_text, MRB_ARGS_NONE());
   mrb_define_method(mrb, frame_class, "select_font",
     mrbmacs_frame_select_font, MRB_ARGS_NONE());
   mrb_define_method(mrb, frame_class, "update_native_echo_height",

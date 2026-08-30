@@ -233,6 +233,36 @@ assert('Mrbmacs::ApplicationCocoa handles a Scintilla key command') do
   assert_equal [Scintilla::SCI_CHARRIGHT], view.messages
 end
 
+assert('Mrbmacs::ApplicationCocoa discards edit marked text before a command') do
+  buffer = Mrbmacs::Buffer.new('*scratch*')
+  view = CocoaViewForLayoutTest.new
+  frame = Mrbmacs::FrameCocoa.new(
+    Mrbmacs::TabCocoa.new(Mrbmacs::PaneCocoa.new(view, buffer))
+  )
+  discarded = false
+  frame.define_singleton_method(:discard_edit_marked_text) { discarded = true }
+  app = build_cocoa_application_for_test(frame, buffer)
+
+  assert_true app.key_press('C-f')
+  assert_true discarded
+  assert_equal [Scintilla::SCI_CHARRIGHT], view.messages
+end
+
+assert('Mrbmacs::ApplicationCocoa preserves marked text for unhandled text input') do
+  buffer = Mrbmacs::Buffer.new('*scratch*')
+  view = CocoaViewForLayoutTest.new
+  frame = Mrbmacs::FrameCocoa.new(
+    Mrbmacs::TabCocoa.new(Mrbmacs::PaneCocoa.new(view, buffer))
+  )
+  discarded = false
+  frame.define_singleton_method(:discard_edit_marked_text) { discarded = true }
+  app = build_cocoa_application_for_test(frame, buffer)
+
+  assert_false app.key_press('a')
+  assert_false discarded
+  assert_equal [], view.messages
+end
+
 
 assert('Mrbmacs::ApplicationCocoa handles a prefix Scintilla command') do
   buffer = Mrbmacs::Buffer.new('*scratch*')
