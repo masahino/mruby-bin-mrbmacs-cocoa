@@ -59,3 +59,28 @@ assert('Mrbmacs::ApplicationCocoa uses byte length for search text') do
   app.echo_sci_notify('code' => Scintilla::SCN_MODIFIED)
   assert_equal 'あ'.bytesize, view.search_lengths.last
 end
+
+assert('Mrbmacs::ApplicationCocoa highlights every match while searching') do
+  buffer = Mrbmacs::Buffer.new('*scratch*')
+  view = CocoaViewForLayoutTest.new
+  view.text = 'alpha beta alpha'
+  echo_win = CocoaViewForLayoutTest.new
+  frame = Mrbmacs::FrameCocoa.new(
+    Mrbmacs::TabCocoa.new(Mrbmacs::PaneCocoa.new(view, buffer)), echo_win
+  )
+  app = build_cocoa_application_for_test(frame, buffer)
+
+  app.isearch_forward
+  echo_win.text = 'alpha'
+  app.echo_sci_notify('code' => Scintilla::SCN_MODIFIED)
+
+  assert_true app.search_highlight_active?
+  assert_equal [[0, 5], [11, 5]], view.indicator_fills
+  # the current match (selected at 0..5) is cleared again so only the
+  # selection marks it
+  assert_true view.indicator_clears.include?([0, 5])
+  assert_equal [0, 5], view.selections.last
+
+  app.echo_key_press('Enter')
+  assert_false app.search_highlight_active?
+end

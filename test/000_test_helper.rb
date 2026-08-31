@@ -124,6 +124,7 @@ class CocoaViewForLayoutTest
   attr_reader :vertical_scrollbar
   attr_reader :annotations
   attr_reader :autoc_max_heights, :autoc_separators, :codepages
+  attr_reader :indicator_fills, :indicator_clears
 
   def initialize(docpointer = 100)
     @docpointer = docpointer
@@ -160,6 +161,8 @@ class CocoaViewForLayoutTest
     @autoc_max_heights = []
     @autoc_separators = []
     @codepages = []
+    @indicator_fills = []
+    @indicator_clears = []
   end
 
   def sci_get_docpointer
@@ -266,6 +269,30 @@ class CocoaViewForLayoutTest
 
   def sci_get_target_end
     @target_end
+  end
+
+  def sci_get_first_visible_line
+    0
+  end
+
+  def sci_position_from_line(_line)
+    0
+  end
+
+  def sci_get_line_end_position(_line)
+    @text.bytesize
+  end
+
+  def sci_set_indicator_current(indicator)
+    @current_indicator = indicator
+  end
+
+  def sci_indicator_fill_range(start_pos, length)
+    @indicator_fills << [start_pos, length]
+  end
+
+  def sci_indicator_clear_range(start_pos, length)
+    @indicator_clears << [start_pos, length]
   end
 
   def sci_search_in_target(length, search_text)

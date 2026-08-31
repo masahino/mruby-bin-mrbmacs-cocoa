@@ -9,6 +9,7 @@ module Mrbmacs
 
       @isearch_text = text
       if text.empty?
+        search_highlight_begin('')
         @frame.view.sci_goto_pos(@isearch_origin)
         @frame.modeline(self)
         return
@@ -85,13 +86,20 @@ module Mrbmacs
           @isearch_text.bytesize, @isearch_text
         )
       end
-      return if found == -1
+      if found == -1
+        search_highlight_begin(@isearch_text)
+        return
+      end
 
       view.sci_set_sel(view.sci_get_target_start, view.sci_get_target_end)
+      # After the current match is selected, so refresh_search_highlight can
+      # keep the lazy-highlight off it.
+      search_highlight_begin(@isearch_text)
       @frame.modeline(self)
     end
 
     def finish_isearch(cancel)
+      search_highlight_end
       @frame.view.sci_goto_pos(@isearch_origin) if cancel
       @isearch_active = false
       @frame.finish_isearch
