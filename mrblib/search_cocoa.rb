@@ -88,6 +88,7 @@ module Mrbmacs
       end
       if found == -1
         search_highlight_begin(@isearch_text)
+        @frame.modeline(self)
         return
       end
 

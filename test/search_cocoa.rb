@@ -80,7 +80,12 @@ assert('Mrbmacs::ApplicationCocoa highlights every match while searching') do
   # selection marks it
   assert_true view.indicator_clears.include?([0, 5])
   assert_equal [0, 5], view.selections.last
+  assert_equal '    [isearch 1/2]', app.modeline_search
+
+  app.echo_key_press('C-s')
+  assert_equal '    [isearch 2/2]', app.modeline_search
 
   app.echo_key_press('Enter')
   assert_false app.search_highlight_active?
+  assert_equal '', app.modeline_search
 end
