@@ -121,3 +121,24 @@ assert('Mrbmacs::ApplicationCocoa uses byte lengths for replacement') do
 
   assert_equal 'あ'.bytesize, view.replacement_lengths.last
 end
+
+assert('Mrbmacs::ApplicationCocoa highlights every match during query replace') do
+  buffer = Mrbmacs::Buffer.new('*scratch*')
+  view = CocoaViewForLayoutTest.new
+  view.text = 'one two one'
+  echo_win = CocoaViewForLayoutTest.new
+  frame = Mrbmacs::FrameCocoa.new(
+    Mrbmacs::TabCocoa.new(Mrbmacs::PaneCocoa.new(view, buffer)), echo_win
+  )
+  app = build_cocoa_application_for_test(frame, buffer)
+
+  app.start_replace(true, 'one', '1')
+
+  assert_true app.search_highlight_active?
+  assert_true view.indicator_fills.include?([0, 3])
+  assert_true view.indicator_fills.include?([8, 3])
+  assert_true view.indicator_clears.include?([0, 3]) # current match excluded
+
+  app.echo_key_press('q')
+  assert_false app.search_highlight_active?
+end

@@ -80,6 +80,9 @@ module Mrbmacs
       end
 
       view.sci_set_sel(view.sci_get_target_start, view.sci_get_target_end)
+      # Refresh after each match: the document shifts as replacements happen,
+      # and this keeps the lazy-highlight off the current match.
+      search_highlight_begin(@replace_search_text)
       prompt = "Query replacing #{@replace_search_text} with " \
                "#{@replacement_text}: (y, n, !, q) "
       @frame.start_query_replace(prompt)
@@ -126,6 +129,7 @@ module Mrbmacs
     end
 
     def finish_query_replace(message)
+      search_highlight_end
       @query_replace_active = false
       @frame.finish_query_replace
       @frame.echo_puts(message)
