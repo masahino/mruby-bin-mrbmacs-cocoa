@@ -66,6 +66,14 @@ class CocoaFrameForExitTest < Mrbmacs::FrameCocoa
   end
 end
 
+class Mrbmacs::FrameCocoa
+  def discard_edit_marked_text
+  end
+
+  def discard_echo_marked_text
+  end
+end
+
 class CocoaFrameForNativeSplitTest < Mrbmacs::FrameCocoa
   def pane_can_split?(_pane, _direction, _size)
     true
@@ -381,6 +389,22 @@ class CocoaViewForLayoutTest
 
   def sci_style_set_size(style, size)
     @theme_messages << [:style_size, style, size]
+  end
+
+  def sci_indic_set_style(indicator, style)
+    @theme_messages << [:indicator_style, indicator, style]
+  end
+
+  def sci_indic_set_fore(indicator, color)
+    @theme_messages << [:indicator_fore, indicator, color]
+  end
+
+  def sci_indic_set_alpha(indicator, alpha)
+    @theme_messages << [:indicator_alpha, indicator, alpha]
+  end
+
+  def sci_indic_set_outline_alpha(indicator, alpha)
+    @theme_messages << [:indicator_outline_alpha, indicator, alpha]
   end
 
   def sci_set_extra_ascent(value)
