@@ -15,6 +15,8 @@ assert('Mrbmacs::ApplicationCocoa searches incrementally forward') do
   assert_equal [0, 5], view.selections.last
   assert_true app.echo_key_press('C-s')
   assert_equal [11, 16], view.selections.last
+  assert_true app.echo_key_press('C-s')
+  assert_equal [0, 5], view.selections.last
   echo_win.text = ''
   app.echo_sci_notify('code' => Scintilla::SCN_MODIFIED)
   assert_equal 0, view.current_pos
@@ -84,6 +86,10 @@ assert('Mrbmacs::ApplicationCocoa highlights every match while searching') do
 
   app.echo_key_press('C-s')
   assert_equal '    [isearch 2/2]', app.modeline_search
+
+  app.echo_key_press('C-s')
+  assert_equal [0, 5], view.selections.last
+  assert_equal '    [isearch 1/2]', app.modeline_search
 
   app.echo_key_press('Enter')
   assert_false app.search_highlight_active?

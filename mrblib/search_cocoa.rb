@@ -81,7 +81,9 @@ module Mrbmacs
         view.sci_set_target_start(
           @isearch_backward ? view.sci_get_length : 0
         )
-        view.sci_set_target_end(@isearch_origin)
+        view.sci_set_target_end(
+          @isearch_backward ? 0 : view.sci_get_length
+        )
         found = view.sci_search_in_target(
           @isearch_text.bytesize, @isearch_text
         )
