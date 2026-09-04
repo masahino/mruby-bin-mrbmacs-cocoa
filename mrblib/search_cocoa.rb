@@ -1,5 +1,5 @@
 module Mrbmacs
-  class ApplicationCocoa < Application
+  class ApplicationCocoa < ApplicationGui
     def echo_sci_notify(_notification)
       return unless @isearch_active
       return if @isearch_setting_text

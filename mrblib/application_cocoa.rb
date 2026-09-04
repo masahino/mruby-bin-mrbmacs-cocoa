@@ -1,6 +1,6 @@
 module Mrbmacs
   # Native macOS mrbmacs application.
-  class ApplicationCocoa < Application
+  class ApplicationCocoa < ApplicationGui
     def set_keybind(win, key, command)
       keydef = 0
       key_parts = key.split('-')

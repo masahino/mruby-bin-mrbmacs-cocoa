@@ -1,5 +1,5 @@
 module Mrbmacs
-  class ApplicationCocoa < Application
+  class ApplicationCocoa < ApplicationGui
     def start_replace(query, search_text = nil, replacement_text = nil)
       if @frame.view.sci_get_readonly
         @frame.echo_puts('Buffer is read-only')
