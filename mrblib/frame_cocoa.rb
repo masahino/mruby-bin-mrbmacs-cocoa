@@ -92,27 +92,6 @@ module Mrbmacs
       apply_echo_theme(theme) unless @echo_win.nil?
     end
 
-    def apply_echo_theme(theme)
-      @echo_win.sci_style_set_fore(
-        Scintilla::STYLE_DEFAULT, theme.foreground_color
-      )
-      @echo_win.sci_style_set_back(
-        Scintilla::STYLE_DEFAULT, theme.background_color
-      )
-      @echo_win.sci_style_clear_all
-      # sci_style_clear_all resets STYLE_LINENUMBER.back to the light system
-      # "chrome" colour. The prompt lives in an SC_MARGIN_TEXT margin whose
-      # background is filled with STYLE_LINENUMBER.back, so without this the
-      # prompt sits on a light patch.
-      @echo_win.sci_style_set_fore(
-        Scintilla::STYLE_LINENUMBER, theme.foreground_color
-      )
-      @echo_win.sci_style_set_back(
-        Scintilla::STYLE_LINENUMBER, theme.background_color
-      )
-      @echo_win.sci_set_caret_fore(theme.foreground_color)
-    end
-
     def set_font(name, size)
       @font_name = name
       @font_size = size
