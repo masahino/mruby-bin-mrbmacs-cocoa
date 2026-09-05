@@ -14,6 +14,20 @@ MACOS_NOTARY_PROFILE = ENV.fetch('NOTARY_PROFILE', 'mrbmacs-notary').freeze
 MACOS_NOTARIZATION_ARCHIVE = File.expand_path(
   'build/Mrbmacs-notarization.zip', __dir__ + '/..'
 ).freeze
+MACOS_VERSION_FILE = File.expand_path(
+  '../mruby/build/host/mrbgems/mruby-bin-mrbmacs-cocoa/version.txt',
+  __dir__
+).freeze
+
+def generated_macos_app_version
+  raise "Version file was not generated: #{MACOS_VERSION_FILE}" \
+    unless File.file?(MACOS_VERSION_FILE)
+
+  version = File.read(MACOS_VERSION_FILE).strip
+  raise "Generated version is empty: #{MACOS_VERSION_FILE}" if version.empty?
+
+  version
+end
 
 def scintilla_framework_path
   frameworks = Dir.glob(File.expand_path(
@@ -106,6 +120,11 @@ task app: :compile do
   FileUtils.cp(
     File.expand_path('../resources/Info.plist', __dir__),
     MACOS_APP_CONTENTS
+  )
+  sh(
+    '/usr/libexec/PlistBuddy', '-c',
+    "Add :CFBundleShortVersionString string #{generated_macos_app_version}",
+    File.join(MACOS_APP_CONTENTS, 'Info.plist')
   )
   FileUtils.cp(
     File.expand_path('../resources/mrbmacs.icns', __dir__),
