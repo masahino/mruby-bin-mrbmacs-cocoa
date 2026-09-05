@@ -18,16 +18,6 @@ module Mrbmacs
     def init_instance_variables
       super
       @prefix_key = ''
-      @isearch_active = false
-      @isearch_backward = false
-      @isearch_origin = nil
-      @isearch_setting_text = false
-      @isearch_text = ''
-      @query_replace_active = false
-      @replace_count = 0
-      @replace_search_text = nil
-      @replacement_text = nil
-      @replace_next_pos = nil
     end
 
     def init_frame
@@ -78,29 +68,6 @@ module Mrbmacs
         @current_buffer = pane.buffer
       end
       sci_notify(notification)
-    end
-
-    def echo_key_press(key)
-      return query_replace_key_press(key) if @query_replace_active
-      return false unless @isearch_active
-
-      case key
-      when 'C-s'
-        isearch_forward
-      when 'C-r'
-        isearch_backward
-      when 'Enter'
-        finish_isearch(false)
-      when 'C-g'
-        finish_isearch(true)
-      else
-        if key.start_with?('C-', 'M-') || key == 'Escape'
-          finish_isearch(false)
-        else
-          return false
-        end
-      end
-      true
     end
 
     # Cocoa uses a layout tree and NSSplitView instead of terminal coordinates.
