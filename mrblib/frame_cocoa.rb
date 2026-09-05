@@ -234,12 +234,6 @@ module Mrbmacs
       end
     end
 
-    def echo_set_prompt(prompt)
-      width = @echo_win.sci_text_width(Scintilla::STYLE_DEFAULT, prompt)
-      @echo_win.sci_set_margin_widthn(3, width)
-      @echo_win.sci_margin_set_text(0, prompt)
-    end
-
     def echo_gets(prompt, text = '', &block)
       @echo_win.sci_clear_all
       echo_set_prompt(prompt)
