@@ -226,9 +226,8 @@ assert('Mrbmacs::FrameCocoa confirms with one modal key') do
     Mrbmacs::TabCocoa.new(pane), echo_win
   )
 
-  frame.confirmation_event = :yes
+  frame.choice_events = ['y', 'n']
   assert_true frame.y_or_n('Buffer modified; kill anyway? (y or n) ')
-  frame.confirmation_event = :no
   assert_false frame.y_or_n('Buffer modified; kill anyway? (y or n) ')
   assert_equal '', echo_win.text
   assert_true view.messages.include?(:grab_focus)

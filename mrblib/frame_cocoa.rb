@@ -332,5 +332,9 @@ module Mrbmacs
     def wait_confirmation_event
       raise NotImplementedError
     end
+
+    def wait_choice_event
+      raise NotImplementedError
+    end
   end
 end

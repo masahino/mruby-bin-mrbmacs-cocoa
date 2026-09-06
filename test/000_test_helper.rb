@@ -105,10 +105,10 @@ class CocoaFrameForEchoInputTest < Mrbmacs::FrameCocoa
 end
 
 class CocoaFrameForConfirmationTest < CocoaFrameForEchoInputTest
-  attr_accessor :confirmation_event
+  attr_accessor :choice_events
 
-  def wait_confirmation_event
-    @confirmation_event
+  def wait_choice_event
+    @choice_events.shift
   end
 end
 
