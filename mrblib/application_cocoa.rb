@@ -117,7 +117,8 @@ module Mrbmacs
     # Cocoa terminates its native event loop through FrameCocoa#exit. Avoid
     # raising SystemExit while handling an NSEvent callback.
     def save_buffers_kill_terminal
-      before_save_buffers_kill_terminal(self)
+      return :cancelled unless prepare_to_exit
+
       @frame.exit
     end
 

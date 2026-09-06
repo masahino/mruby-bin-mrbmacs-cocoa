@@ -115,6 +115,23 @@ mrbmacs_set_app_default_directory(void)
 @end
 
 @implementation MrbmacsApplicationDelegate
+- (NSApplicationTerminateReply)applicationShouldTerminate:(NSApplication *)sender
+{
+  mrb_value result;
+
+  (void)sender;
+  if (!mrbmacs_app_ready) {
+    return NSTerminateNow;
+  }
+
+  result = mrb_funcall(mrbmacs_mrb, mrbmacs_app, "prepare_to_exit", 0);
+  if (mrbmacs_mrb->exc != NULL) {
+    mrbmacs_print_mruby_error(mrbmacs_mrb);
+    return NSTerminateCancel;
+  }
+  return mrb_test(result) ? NSTerminateNow : NSTerminateCancel;
+}
+
 - (void)application:(NSApplication *)sender openFiles:(NSArray *)filenames
 {
   [mrbmacs_pending_open_paths addObjectsFromArray:filenames];
