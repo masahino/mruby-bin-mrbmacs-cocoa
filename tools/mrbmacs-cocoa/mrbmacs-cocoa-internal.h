@@ -20,6 +20,7 @@ typedef struct {
   NSWindow *window;
   NSView *echo_native_view;
   BOOL confirmation_input;
+  BOOL choice_input;
   id font_target;
   NSMutableDictionary *io_sources;
   NSMutableArray *pending_open_paths;
@@ -36,6 +37,7 @@ extern MrbmacsCocoaContext mrbmacs_cocoa;
 #define mrbmacs_window mrbmacs_cocoa.window
 #define mrbmacs_echo_native_view mrbmacs_cocoa.echo_native_view
 #define mrbmacs_confirmation_input mrbmacs_cocoa.confirmation_input
+#define mrbmacs_choice_input mrbmacs_cocoa.choice_input
 #define mrbmacs_font_target mrbmacs_cocoa.font_target
 #define mrbmacs_io_sources mrbmacs_cocoa.io_sources
 #define mrbmacs_pending_open_paths mrbmacs_cocoa.pending_open_paths
@@ -43,7 +45,8 @@ extern MrbmacsCocoaContext mrbmacs_cocoa;
 enum {
   MRBMACS_MODAL_RESPONSE_TAB = 1001,
   MRBMACS_MODAL_RESPONSE_YES,
-  MRBMACS_MODAL_RESPONSE_NO
+  MRBMACS_MODAL_RESPONSE_NO,
+  MRBMACS_MODAL_RESPONSE_CHOICE_BASE = 2000
 };
 
 void mrbmacs_print_mruby_error(mrb_state *mrb);

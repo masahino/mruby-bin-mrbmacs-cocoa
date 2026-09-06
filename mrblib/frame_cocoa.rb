@@ -265,9 +265,19 @@ module Mrbmacs
     end
 
     def y_or_n(prompt)
+      read_choice(prompt, { 'y' => true, 'n' => false }) == true
+    end
+
+    def read_choice(prompt, choices)
       @echo_win.sci_clear_all
       echo_set_prompt(prompt)
-      wait_confirmation_event == :yes
+      loop do
+        key = wait_choice_event
+        return :cancel if key.nil?
+
+        choice = choices[key.downcase]
+        return choice unless choice.nil?
+      end
     ensure
       discard_echo_marked_text
       @echo_win.sci_clear_all unless @echo_win.nil?

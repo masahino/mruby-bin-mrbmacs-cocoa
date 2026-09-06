@@ -46,6 +46,28 @@ mrbmacs_frame_wait_confirmation_event(mrb_state *mrb, mrb_value self)
   return mrb_symbol_value(mrb_intern_lit(mrb, "no"));
 }
 
+static mrb_value
+mrbmacs_frame_wait_choice_event(mrb_state *mrb, mrb_value self)
+{
+  NSModalResponse response;
+  mrb_value echo_win;
+  char choice[2];
+
+  echo_win = mrb_iv_get(mrb, self, mrb_intern_lit(mrb, "@echo_win"));
+  mrb_funcall(mrb, echo_win, "sci_grab_focus", 0);
+  mrbmacs_choice_input = YES;
+  response = [NSApp runModalForWindow:NSApp.keyWindow];
+  mrbmacs_choice_input = NO;
+  mrbmacs_application_schedule_pending_open_files();
+  if (response < MRBMACS_MODAL_RESPONSE_CHOICE_BASE ||
+      response >= MRBMACS_MODAL_RESPONSE_CHOICE_BASE + 128) {
+    return mrb_nil_value();
+  }
+  choice[0] = (char)(response - MRBMACS_MODAL_RESPONSE_CHOICE_BASE);
+  choice[1] = '\0';
+  return mrb_str_new_cstr(mrb, choice);
+}
+
 static void
 mrbmacs_discard_marked_text_in_view(NSView *native_view)
 {
@@ -291,6 +313,8 @@ mrbmacs_frame_register_methods(mrb_state *mrb, struct RClass *mrbmacs)
     mrbmacs_frame_wait_echo_event, MRB_ARGS_NONE());
   mrb_define_method(mrb, frame_class, "wait_confirmation_event",
     mrbmacs_frame_wait_confirmation_event, MRB_ARGS_NONE());
+  mrb_define_method(mrb, frame_class, "wait_choice_event",
+    mrbmacs_frame_wait_choice_event, MRB_ARGS_NONE());
   mrb_define_method(mrb, frame_class, "discard_echo_marked_text",
     mrbmacs_frame_discard_echo_marked_text, MRB_ARGS_NONE());
   mrb_define_method(mrb, frame_class, "discard_edit_marked_text",

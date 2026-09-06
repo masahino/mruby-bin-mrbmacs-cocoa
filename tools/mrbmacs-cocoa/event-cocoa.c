@@ -59,6 +59,17 @@ mrbmacs_handle_key_event(NSEvent *event)
     ([responder isKindOfClass:[NSView class]] &&
      [(NSView *)responder isDescendantOf:mrbmacs_echo_native_view]);
   if (NSApp.modalWindow != nil && echo_is_responder) {
+    if (mrbmacs_choice_input) {
+      if ([key isEqualToString:@"C-g"]) {
+        [NSApp stopModalWithCode:NSModalResponseCancel];
+        return nil;
+      }
+      if (key.length == 1 && [key characterAtIndex:0] < 128) {
+        [NSApp stopModalWithCode:
+          MRBMACS_MODAL_RESPONSE_CHOICE_BASE + [key characterAtIndex:0]];
+      }
+      return nil;
+    }
     if (mrbmacs_confirmation_input) {
       if ([key isEqualToString:@"y"]) {
         [NSApp stopModalWithCode:MRBMACS_MODAL_RESPONSE_YES];
@@ -122,5 +133,4 @@ mrbmacs_event_remove_monitor(void)
 {
   [NSEvent removeMonitor:key_event_monitor];
 }
-
 
