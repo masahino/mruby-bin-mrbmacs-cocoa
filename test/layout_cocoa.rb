@@ -1,7 +1,7 @@
 assert('Cocoa layout starts with one frame, one tab, and one pane') do
   view = CocoaViewForLayoutTest.new
   pane = Mrbmacs::PaneCocoa.new(view)
-  tab = Mrbmacs::TabCocoa.new(pane)
+  tab = Mrbmacs::TabLayout.new(pane)
   frame = Mrbmacs::FrameCocoa.new(tab)
 
   assert_same view, pane.view
@@ -20,7 +20,7 @@ end
 assert('Cocoa layout exposes the shared frame and edit-window interface') do
   view = CocoaViewForLayoutTest.new
   pane = Mrbmacs::PaneCocoa.new(view)
-  frame = Mrbmacs::FrameCocoa.new(Mrbmacs::TabCocoa.new(pane))
+  frame = Mrbmacs::FrameCocoa.new(Mrbmacs::TabLayout.new(pane))
 
   assert_kind_of Mrbmacs::FrameBase, frame
   assert_same view, pane.sci
@@ -33,7 +33,7 @@ assert('Cocoa tab maintains a nested pane layout tree') do
   first = Mrbmacs::PaneCocoa.new(CocoaViewForLayoutTest.new(101))
   second = Mrbmacs::PaneCocoa.new(CocoaViewForLayoutTest.new(102))
   third = Mrbmacs::PaneCocoa.new(CocoaViewForLayoutTest.new(103))
-  tab = Mrbmacs::TabCocoa.new(first)
+  tab = Mrbmacs::TabLayout.new(first)
 
   vertical = tab.split(first, second, :vertical)
   horizontal = tab.split(second, third, :horizontal)
@@ -50,7 +50,7 @@ assert('Cocoa frame resizes the nearest matching native split') do
   first = Mrbmacs::PaneCocoa.new(CocoaViewForLayoutTest.new(101))
   second = Mrbmacs::PaneCocoa.new(CocoaViewForLayoutTest.new(102))
   third = Mrbmacs::PaneCocoa.new(CocoaViewForLayoutTest.new(103))
-  tab = Mrbmacs::TabCocoa.new(first)
+  tab = Mrbmacs::TabLayout.new(first)
   horizontal = tab.split(first, second, :horizontal)
   vertical = tab.split(first, third, :vertical)
   horizontal.native_handle = 201
@@ -79,7 +79,7 @@ end
 assert('Cocoa frame ignores resize without a split in that direction') do
   first = Mrbmacs::PaneCocoa.new(CocoaViewForLayoutTest.new(101))
   second = Mrbmacs::PaneCocoa.new(CocoaViewForLayoutTest.new(102))
-  tab = Mrbmacs::TabCocoa.new(first)
+  tab = Mrbmacs::TabLayout.new(first)
   split = tab.split(first, second, :horizontal)
   split.native_handle = 201
   frame = Mrbmacs::FrameCocoa.new(tab)
@@ -92,7 +92,7 @@ assert('Cocoa frame cycles and deletes panes through the layout tree') do
   first = Mrbmacs::PaneCocoa.new(CocoaViewForLayoutTest.new(101), buffer)
   second = Mrbmacs::PaneCocoa.new(CocoaViewForLayoutTest.new(102), buffer)
   third = Mrbmacs::PaneCocoa.new(CocoaViewForLayoutTest.new(103), buffer)
-  tab = Mrbmacs::TabCocoa.new(first)
+  tab = Mrbmacs::TabLayout.new(first)
   tab.split(first, second, :vertical)
   tab.split(second, third, :horizontal)
   frame = Mrbmacs::FrameCocoa.new(tab)
@@ -118,7 +118,7 @@ end
 assert('Cocoa application splits the active pane with the same buffer') do
   buffer = Mrbmacs::Buffer.new('*scratch*')
   pane = Mrbmacs::PaneCocoa.new(Scintilla::ScintillaCocoa.new, buffer)
-  tab = Mrbmacs::TabCocoa.new(pane)
+  tab = Mrbmacs::TabLayout.new(pane)
   frame = Mrbmacs::FrameCocoa.new(tab)
   app = build_cocoa_application_for_test(frame, buffer)
 
@@ -135,7 +135,7 @@ end
 assert('Cocoa application rejects a pane that is too small to split') do
   buffer = Mrbmacs::Buffer.new('*scratch*')
   pane = Mrbmacs::PaneCocoa.new(CocoaViewForLayoutTest.new, buffer)
-  tab = Mrbmacs::TabCocoa.new(pane)
+  tab = Mrbmacs::TabLayout.new(pane)
   frame = Mrbmacs::FrameCocoa.new(tab)
   frame.native_handle = 1
   frame.define_singleton_method(:pane_can_split?) do |_pane, _direction, _size|
@@ -152,7 +152,7 @@ end
 assert('Cocoa application associates a native split with its layout node') do
   buffer = Mrbmacs::Buffer.new('*scratch*')
   pane = Mrbmacs::PaneCocoa.new(Scintilla::ScintillaCocoa.new, buffer)
-  tab = Mrbmacs::TabCocoa.new(pane)
+  tab = Mrbmacs::TabLayout.new(pane)
   frame = CocoaFrameForNativeSplitTest.new(tab)
   frame.native_handle = 1
   app = build_cocoa_application_for_test(frame, buffer)
@@ -164,7 +164,7 @@ end
 
 assert('Cocoa frame refuses to delete its sole pane') do
   pane = Mrbmacs::PaneCocoa.new(CocoaViewForLayoutTest.new)
-  frame = Mrbmacs::FrameCocoa.new(Mrbmacs::TabCocoa.new(pane))
+  frame = Mrbmacs::FrameCocoa.new(Mrbmacs::TabLayout.new(pane))
 
   frame.delete_window(pane)
 
@@ -172,10 +172,10 @@ assert('Cocoa frame refuses to delete its sole pane') do
   assert_equal 'Atempt to delete sole ordinary window', frame.last_message
 end
 
-assert('Mrbmacs::TabCocoa is a layout and not a buffer') do
+assert('Mrbmacs::TabLayout is a layout and not a buffer') do
   buffer = Mrbmacs::Buffer.new('*scratch*')
   pane = Mrbmacs::PaneCocoa.new(CocoaViewForLayoutTest.new, buffer)
-  tab = Mrbmacs::TabCocoa.new(pane)
+  tab = Mrbmacs::TabLayout.new(pane)
 
   assert_same buffer, pane.buffer
   assert_false tab.respond_to?(:buffer)

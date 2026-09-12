@@ -24,7 +24,7 @@ module Mrbmacs
       view = Scintilla::ScintillaCocoa.new
       echo_view = Scintilla::ScintillaCocoa.new
       pane = PaneCocoa.new(view, @current_buffer)
-      @frame = FrameCocoa.new(TabCocoa.new(pane), echo_view)
+      @frame = FrameCocoa.new(TabLayout.new(pane), echo_view)
       initialize_native_frame
     end
 

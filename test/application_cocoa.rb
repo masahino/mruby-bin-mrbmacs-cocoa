@@ -64,7 +64,7 @@ end
 assert('Mrbmacs::ApplicationCocoa owns its Cocoa frame and initial buffer') do
   buffer = Mrbmacs::Buffer.new('*scratch*')
   pane = Mrbmacs::PaneCocoa.new(CocoaViewForLayoutTest.new, buffer)
-  frame = Mrbmacs::FrameCocoa.new(Mrbmacs::TabCocoa.new(pane))
+  frame = Mrbmacs::FrameCocoa.new(Mrbmacs::TabLayout.new(pane))
   app = build_cocoa_application_for_test(frame, buffer)
 
   assert_same frame, app.frame
@@ -99,7 +99,7 @@ assert('Mrbmacs::ApplicationCocoa applies the shared echo-area keymap') do
   buffer = Mrbmacs::Buffer.new('*scratch*')
   pane = Mrbmacs::PaneCocoa.new(CocoaViewForLayoutTest.new, buffer)
   echo_win = CocoaViewForLayoutTest.new
-  frame = Mrbmacs::FrameCocoa.new(Mrbmacs::TabCocoa.new(pane), echo_win)
+  frame = Mrbmacs::FrameCocoa.new(Mrbmacs::TabLayout.new(pane), echo_win)
   build_cocoa_application_for_test(frame, buffer)
   ctrl = Scintilla::SCMOD_META << 16
 
@@ -146,7 +146,7 @@ assert('Mrbmacs::ApplicationCocoa follows native pane focus') do
   second = Mrbmacs::PaneCocoa.new(
     CocoaViewForLayoutTest.new(102), second_buffer
   )
-  tab = Mrbmacs::TabCocoa.new(first)
+  tab = Mrbmacs::TabLayout.new(first)
   tab.split(first, second, :vertical)
   frame = Mrbmacs::FrameCocoa.new(tab)
   app = build_cocoa_application_for_test(frame, first_buffer)
@@ -176,7 +176,7 @@ assert('Mrbmacs::ApplicationCocoa opens a new file with shared find_file') do
   buffer = Mrbmacs::Buffer.new('*scratch*')
   view = CocoaViewForLayoutTest.new
   pane = Mrbmacs::PaneCocoa.new(view, buffer)
-  frame = Mrbmacs::FrameCocoa.new(Mrbmacs::TabCocoa.new(pane))
+  frame = Mrbmacs::FrameCocoa.new(Mrbmacs::TabLayout.new(pane))
   app = build_cocoa_application_for_test(frame, buffer)
 
   app.find_file(filename)
@@ -192,7 +192,7 @@ assert('Mrbmacs::ApplicationCocoa switches safely with only one buffer') do
   view = CocoaViewForLayoutTest.new
   echo_win = CocoaViewForLayoutTest.new
   frame = CocoaFrameForEchoInputTest.new(
-    Mrbmacs::TabCocoa.new(Mrbmacs::PaneCocoa.new(view, buffer)), echo_win
+    Mrbmacs::TabLayout.new(Mrbmacs::PaneCocoa.new(view, buffer)), echo_win
   )
   frame.input_events = [[:enter, '']]
   app = build_cocoa_application_for_test(frame, buffer)
@@ -208,7 +208,7 @@ assert('Mrbmacs::ApplicationCocoa kills a buffer through shared command') do
   view = CocoaViewForLayoutTest.new
   echo_win = CocoaViewForLayoutTest.new
   frame = CocoaFrameForConfirmationTest.new(
-    Mrbmacs::TabCocoa.new(Mrbmacs::PaneCocoa.new(view, buffer)), echo_win
+    Mrbmacs::TabLayout.new(Mrbmacs::PaneCocoa.new(view, buffer)), echo_win
   )
   app = build_cocoa_application_for_test(frame, buffer)
   filename = "#{ENV['TMPDIR'] || '/tmp'}/mrbmacs-kill-#{$$}.txt"
@@ -225,7 +225,7 @@ assert('Mrbmacs::ApplicationCocoa handles a Scintilla key command') do
   buffer = Mrbmacs::Buffer.new('*scratch*')
   view = CocoaViewForLayoutTest.new
   frame = Mrbmacs::FrameCocoa.new(
-    Mrbmacs::TabCocoa.new(Mrbmacs::PaneCocoa.new(view, buffer))
+    Mrbmacs::TabLayout.new(Mrbmacs::PaneCocoa.new(view, buffer))
   )
   app = build_cocoa_application_for_test(frame, buffer)
 
@@ -237,7 +237,7 @@ assert('Mrbmacs::ApplicationCocoa discards edit marked text before a command') d
   buffer = Mrbmacs::Buffer.new('*scratch*')
   view = CocoaViewForLayoutTest.new
   frame = Mrbmacs::FrameCocoa.new(
-    Mrbmacs::TabCocoa.new(Mrbmacs::PaneCocoa.new(view, buffer))
+    Mrbmacs::TabLayout.new(Mrbmacs::PaneCocoa.new(view, buffer))
   )
   discarded = false
   frame.define_singleton_method(:discard_edit_marked_text) { discarded = true }
@@ -252,7 +252,7 @@ assert('Mrbmacs::ApplicationCocoa preserves marked text for unhandled text input
   buffer = Mrbmacs::Buffer.new('*scratch*')
   view = CocoaViewForLayoutTest.new
   frame = Mrbmacs::FrameCocoa.new(
-    Mrbmacs::TabCocoa.new(Mrbmacs::PaneCocoa.new(view, buffer))
+    Mrbmacs::TabLayout.new(Mrbmacs::PaneCocoa.new(view, buffer))
   )
   discarded = false
   frame.define_singleton_method(:discard_edit_marked_text) { discarded = true }
@@ -268,7 +268,7 @@ assert('Mrbmacs::ApplicationCocoa handles a prefix Scintilla command') do
   buffer = Mrbmacs::Buffer.new('*scratch*')
   view = CocoaViewForLayoutTest.new
   frame = Mrbmacs::FrameCocoa.new(
-    Mrbmacs::TabCocoa.new(Mrbmacs::PaneCocoa.new(view, buffer))
+    Mrbmacs::TabLayout.new(Mrbmacs::PaneCocoa.new(view, buffer))
   )
   app = build_cocoa_application_for_test(frame, buffer)
 
@@ -281,7 +281,7 @@ assert('Mrbmacs::ApplicationCocoa treats Escape as a Meta prefix') do
   buffer = Mrbmacs::Buffer.new('*scratch*')
   view = CocoaViewForLayoutTest.new
   frame = Mrbmacs::FrameCocoa.new(
-    Mrbmacs::TabCocoa.new(Mrbmacs::PaneCocoa.new(view, buffer))
+    Mrbmacs::TabLayout.new(Mrbmacs::PaneCocoa.new(view, buffer))
   )
   app = build_cocoa_application_for_test(frame, buffer)
 
@@ -294,7 +294,7 @@ assert('Mrbmacs::ApplicationCocoa clears an undefined Escape prefix') do
   buffer = Mrbmacs::Buffer.new('*scratch*')
   view = CocoaViewForLayoutTest.new
   frame = Mrbmacs::FrameCocoa.new(
-    Mrbmacs::TabCocoa.new(Mrbmacs::PaneCocoa.new(view, buffer))
+    Mrbmacs::TabLayout.new(Mrbmacs::PaneCocoa.new(view, buffer))
   )
   app = build_cocoa_application_for_test(frame, buffer)
 
@@ -309,7 +309,7 @@ assert('Mrbmacs::ApplicationCocoa leaves text input to Cocoa') do
   buffer = Mrbmacs::Buffer.new('*scratch*')
   view = CocoaViewForLayoutTest.new
   frame = Mrbmacs::FrameCocoa.new(
-    Mrbmacs::TabCocoa.new(Mrbmacs::PaneCocoa.new(view, buffer))
+    Mrbmacs::TabLayout.new(Mrbmacs::PaneCocoa.new(view, buffer))
   )
   app = build_cocoa_application_for_test(frame, buffer)
 
@@ -322,7 +322,7 @@ assert('Mrbmacs::ApplicationCocoa runs a shared Ruby editor command') do
   buffer = Mrbmacs::Buffer.new('*scratch*')
   view = CocoaViewForLayoutTest.new
   frame = Mrbmacs::FrameCocoa.new(
-    Mrbmacs::TabCocoa.new(Mrbmacs::PaneCocoa.new(view, buffer))
+    Mrbmacs::TabLayout.new(Mrbmacs::PaneCocoa.new(view, buffer))
   )
   app = build_cocoa_application_for_test(frame, buffer)
 
@@ -334,7 +334,7 @@ assert('Mrbmacs::ApplicationCocoa handles mark, copy, and yank commands') do
   buffer = Mrbmacs::Buffer.new('*scratch*')
   view = CocoaViewForLayoutTest.new
   frame = Mrbmacs::FrameCocoa.new(
-    Mrbmacs::TabCocoa.new(Mrbmacs::PaneCocoa.new(view, buffer))
+    Mrbmacs::TabLayout.new(Mrbmacs::PaneCocoa.new(view, buffer))
   )
   app = build_cocoa_application_for_test(frame, buffer)
 
@@ -357,7 +357,7 @@ assert('Mrbmacs::ApplicationCocoa handles newline') do
   buffer = Mrbmacs::Buffer.new('*scratch*')
   view = CocoaViewForLayoutTest.new
   frame = Mrbmacs::FrameCocoa.new(
-    Mrbmacs::TabCocoa.new(Mrbmacs::PaneCocoa.new(view, buffer))
+    Mrbmacs::TabLayout.new(Mrbmacs::PaneCocoa.new(view, buffer))
   )
   app = build_cocoa_application_for_test(frame, buffer)
 
@@ -372,7 +372,7 @@ assert('Mrbmacs::ApplicationCocoa saves through a shared Ruby command') do
   view = CocoaViewForLayoutTest.new
   view.text = "saved from Cocoa\n"
   frame = Mrbmacs::FrameCocoa.new(
-    Mrbmacs::TabCocoa.new(Mrbmacs::PaneCocoa.new(view, buffer))
+    Mrbmacs::TabLayout.new(Mrbmacs::PaneCocoa.new(view, buffer))
   )
   app = build_cocoa_application_for_test(frame, buffer)
 
@@ -390,7 +390,7 @@ assert('Mrbmacs::ApplicationCocoa exits through its Cocoa frame') do
   buffer = Mrbmacs::Buffer.new('*scratch*')
   view = CocoaViewForLayoutTest.new
   frame = CocoaFrameForExitTest.new(
-    Mrbmacs::TabCocoa.new(Mrbmacs::PaneCocoa.new(view, buffer))
+    Mrbmacs::TabLayout.new(Mrbmacs::PaneCocoa.new(view, buffer))
   )
   app = build_cocoa_application_for_test(frame, buffer)
 

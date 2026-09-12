@@ -2,7 +2,7 @@ assert('Cocoa frame derives its initial editor size from columns and lines') do
   view = CocoaViewForLayoutTest.new
   view.text_width_scale = 8
   pane = Mrbmacs::PaneCocoa.new(view)
-  frame = Mrbmacs::FrameCocoa.new(Mrbmacs::TabCocoa.new(pane))
+  frame = Mrbmacs::FrameCocoa.new(Mrbmacs::TabLayout.new(pane))
 
   assert_equal 120, Mrbmacs::FrameCocoa::INITIAL_COLUMNS
   assert_equal 40, Mrbmacs::FrameCocoa::INITIAL_LINES
@@ -20,7 +20,7 @@ end
 assert('Mrbmacs::FrameCocoa configures its echo-area caret') do
   pane = Mrbmacs::PaneCocoa.new(CocoaViewForLayoutTest.new)
   echo_win = CocoaViewForLayoutTest.new
-  frame = Mrbmacs::FrameCocoa.new(Mrbmacs::TabCocoa.new(pane), echo_win)
+  frame = Mrbmacs::FrameCocoa.new(Mrbmacs::TabLayout.new(pane), echo_win)
   theme = Mrbmacs::SolarizedDarkTheme.new
   style = Scintilla::CARETSTYLE_BLOCK_AFTER |
           Scintilla::CARETSTYLE_OVERSTRIKE_BLOCK |
@@ -35,7 +35,7 @@ end
 assert('Mrbmacs::FrameCocoa themes the echo prompt margin background') do
   pane = Mrbmacs::PaneCocoa.new(CocoaViewForLayoutTest.new)
   echo_win = CocoaViewForLayoutTest.new
-  frame = Mrbmacs::FrameCocoa.new(Mrbmacs::TabCocoa.new(pane), echo_win)
+  frame = Mrbmacs::FrameCocoa.new(Mrbmacs::TabLayout.new(pane), echo_win)
   theme = Mrbmacs::SolarizedDarkTheme.new
 
   frame.apply_theme(theme)
@@ -51,7 +51,7 @@ end
 
 assert('Mrbmacs::FrameCocoa provides the shared notification queue') do
   pane = Mrbmacs::PaneCocoa.new(CocoaViewForLayoutTest.new)
-  frame = Mrbmacs::FrameCocoa.new(Mrbmacs::TabCocoa.new(pane))
+  frame = Mrbmacs::FrameCocoa.new(Mrbmacs::TabLayout.new(pane))
 
   assert_equal [], frame.sci_notifications
 end
@@ -59,7 +59,7 @@ end
 assert('Mrbmacs::FrameCocoa shows annotations in the active pane') do
   view = CocoaViewForLayoutTest.new
   pane = Mrbmacs::PaneCocoa.new(view)
-  frame = Mrbmacs::FrameCocoa.new(Mrbmacs::TabCocoa.new(pane))
+  frame = Mrbmacs::FrameCocoa.new(Mrbmacs::TabLayout.new(pane))
 
   frame.show_annotation(3, 1, 'Warning:message', 42)
 
@@ -71,7 +71,7 @@ assert('Mrbmacs::FrameCocoa applies a font to every pane and echo area') do
   buffer = Mrbmacs::Buffer.new('*scratch*')
   first = Mrbmacs::PaneCocoa.new(CocoaViewForLayoutTest.new(101), buffer)
   second = Mrbmacs::PaneCocoa.new(CocoaViewForLayoutTest.new(102), buffer)
-  tab = Mrbmacs::TabCocoa.new(first)
+  tab = Mrbmacs::TabLayout.new(first)
   tab.split(first, second, :vertical)
   echo_win = CocoaViewForLayoutTest.new(103)
   frame = Mrbmacs::FrameCocoa.new(tab, echo_win)
@@ -96,7 +96,7 @@ end
 
 assert('Mrbmacs::FrameCocoa updates the active pane mode line') do
   pane = Mrbmacs::PaneCocoa.new(CocoaViewForLayoutTest.new)
-  frame = Mrbmacs::FrameCocoa.new(Mrbmacs::TabCocoa.new(pane))
+  frame = Mrbmacs::FrameCocoa.new(Mrbmacs::TabLayout.new(pane))
   app = CocoaModelineApplicationForTest.new
 
   frame.modeline(app)
@@ -108,7 +108,7 @@ assert('Mrbmacs::FrameCocoa displays messages in its shared echo area') do
   view = CocoaViewForLayoutTest.new
   echo_win = CocoaViewForLayoutTest.new
   pane = Mrbmacs::PaneCocoa.new(view)
-  frame = Mrbmacs::FrameCocoa.new(Mrbmacs::TabCocoa.new(pane), echo_win)
+  frame = Mrbmacs::FrameCocoa.new(Mrbmacs::TabLayout.new(pane), echo_win)
 
   frame.echo_puts('New file')
 
@@ -127,7 +127,7 @@ assert('Mrbmacs::FrameCocoa configures a separate echo notification bridge') do
   view = CocoaViewForLayoutTest.new
   echo_win = CocoaViewForLayoutTest.new
   pane = Mrbmacs::PaneCocoa.new(view)
-  Mrbmacs::FrameCocoa.new(Mrbmacs::TabCocoa.new(pane), echo_win)
+  Mrbmacs::FrameCocoa.new(Mrbmacs::TabLayout.new(pane), echo_win)
 
   assert_kind_of Mrbmacs::EchoNotificationBridge,
                  echo_win.notification_callback
@@ -138,7 +138,7 @@ assert('Mrbmacs::FrameCocoa reads input through its shared echo area') do
   echo_win = CocoaViewForLayoutTest.new
   pane = Mrbmacs::PaneCocoa.new(view)
   frame = CocoaFrameForEchoInputTest.new(
-    Mrbmacs::TabCocoa.new(pane), echo_win
+    Mrbmacs::TabLayout.new(pane), echo_win
   )
   frame.input_events = [[:enter, '/tmp/test.rb']]
 
@@ -155,7 +155,7 @@ assert('Mrbmacs::FrameCocoa discards marked text when echo input is cancelled') 
   echo_win = CocoaViewForLayoutTest.new
   pane = Mrbmacs::PaneCocoa.new(view)
   frame = CocoaFrameForEchoInputTest.new(
-    Mrbmacs::TabCocoa.new(pane), echo_win
+    Mrbmacs::TabLayout.new(pane), echo_win
   )
   frame.input_events = [:cancel]
 
@@ -170,7 +170,7 @@ assert('Mrbmacs::FrameCocoa completes echo input with Tab') do
   echo_win = CocoaViewForLayoutTest.new
   pane = Mrbmacs::PaneCocoa.new(view)
   frame = CocoaFrameForEchoInputTest.new(
-    Mrbmacs::TabCocoa.new(pane), echo_win
+    Mrbmacs::TabLayout.new(pane), echo_win
   )
   frame.input_events = [[:tab, 'for'], :enter, :enter]
 
@@ -187,7 +187,7 @@ assert('Mrbmacs::FrameCocoa selects a buffer through its echo area') do
   echo_win = CocoaViewForLayoutTest.new
   pane = Mrbmacs::PaneCocoa.new(view)
   frame = CocoaFrameForEchoInputTest.new(
-    Mrbmacs::TabCocoa.new(pane), echo_win
+    Mrbmacs::TabLayout.new(pane), echo_win
   )
   frame.input_events = [[:enter, 'notes.rb']]
 
@@ -205,7 +205,7 @@ assert('Mrbmacs::FrameCocoa completes buffer names by prefix') do
   echo_win = CocoaViewForLayoutTest.new
   pane = Mrbmacs::PaneCocoa.new(view)
   frame = CocoaFrameForEchoInputTest.new(
-    Mrbmacs::TabCocoa.new(pane), echo_win
+    Mrbmacs::TabLayout.new(pane), echo_win
   )
   frame.input_events = [[:tab, 'no'], :enter, :enter]
 
@@ -223,7 +223,7 @@ assert('Mrbmacs::FrameCocoa confirms with one modal key') do
   echo_win = CocoaViewForLayoutTest.new
   pane = Mrbmacs::PaneCocoa.new(view)
   frame = CocoaFrameForConfirmationTest.new(
-    Mrbmacs::TabCocoa.new(pane), echo_win
+    Mrbmacs::TabLayout.new(pane), echo_win
   )
 
   frame.choice_events = ['y', 'n']
