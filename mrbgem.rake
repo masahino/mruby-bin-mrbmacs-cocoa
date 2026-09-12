@@ -1,7 +1,7 @@
 MRuby::Gem::Specification.new('mruby-bin-mrbmacs-cocoa') do |spec|
   spec.license = 'MIT'
   spec.author = 'masahino'
-  spec.version = '0.1.0'
+  spec.version = '1.0.0'
 
   version_text = File.join(spec.build_dir, 'version.txt')
   generated_version = File.join(spec.build_dir, 'generated_version.rb')
