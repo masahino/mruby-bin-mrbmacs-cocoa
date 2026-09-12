@@ -78,8 +78,10 @@ Run the development executable:
 ```
 
 The Cocoa frontend uses the shared mrbmacs command-line options and loads
-`~/.mrbmacsrc` during startup. Use `-q` to skip the init file or `-l FILE` to
-load an additional Ruby file.
+`~/.config/mrbmacs/init.rb` during startup, or
+`$XDG_CONFIG_HOME/mrbmacs/init.rb` when `XDG_CONFIG_HOME` is set. Legacy
+`~/.mrbmacs` and `~/.mrbmacsrc` files are fallback locations. Use `-q` to skip
+the init file or `-l FILE` to load an additional Ruby file.
 
 ## Implementation notes
 
